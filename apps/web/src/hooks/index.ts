@@ -37,3 +37,32 @@ export {
   type UseStorageQuotaOptions,
   type UseStorageQuotaReturn,
 } from './useStorageQuota';
+
+// OCR hooks
+export {
+  useOCR,
+  type OCRState,
+  type OCRProgress,
+  type UseOCROptions,
+  type UseOCRReturn,
+} from './useOCR';
+
+// RAG hooks
+export {
+  useRAG,
+  useIndexingProgress,
+  type IndexingState,
+  type QueryState,
+  type UseRAGOptions,
+  type UseRAGReturn,
+} from './useRAG';
+
+// PWA hooks
+export {
+  usePWA,
+  useOnlineStatus,
+  useStandaloneMode,
+  type PWAState,
+  type PWAActions,
+  type UsePWAReturn,
+} from './usePWA';

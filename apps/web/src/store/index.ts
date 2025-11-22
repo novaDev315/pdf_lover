@@ -95,3 +95,41 @@ export type {
   ModalType,
   AddNotificationOptions,
 } from './ui-store';
+
+// Annotation Store
+export {
+  useAnnotationStore,
+  selectSelectedAnnotation,
+  selectAnnotationCount,
+  selectAnnotationsByType,
+  selectIsToolActive,
+  selectUndoCount,
+  selectRedoCount,
+} from './annotation-store';
+export type {
+  AnnotationState,
+  AnnotationActions,
+  AnnotationStore,
+  Rect,
+  Point,
+  Color,
+  AnnotationType,
+  AnnotationTool,
+  BaseAnnotation,
+  HighlightAnnotation,
+  UnderlineAnnotation,
+  StrikethroughAnnotation,
+  TextAnnotation,
+  NoteAnnotation,
+  FreehandAnnotation,
+  ShapeAnnotation,
+  LineAnnotation,
+  ArrowAnnotation,
+  ImageAnnotation,
+  TextFieldAnnotation,
+  CheckboxAnnotation,
+  RedactionAnnotation,
+  Annotation,
+  HistoryEntry,
+  ToolOptions,
+} from './annotation-store';
