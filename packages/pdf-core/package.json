@@ -42,7 +42,8 @@
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^4.7.76"
+    "pdfjs-dist": "^4.7.76",
+    "tesseract.js": "^5.1.0"
   },
   "devDependencies": {
     "@pdflover/shared": "workspace:*",

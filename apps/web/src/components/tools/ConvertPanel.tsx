@@ -1,6 +1,7 @@
 /**
  * ConvertPanel - PDF conversion functionality component
  * Allows users to convert PDFs to images or text, and images to PDF
+ * Includes OCR support for scanned document text extraction
  */
 
 import * as React from 'react'
@@ -13,6 +14,8 @@ import {
   Image,
   FileType,
   Package,
+  ScanLine,
+  Languages,
 } from 'lucide-react'
 import JSZip from 'jszip'
 import { PDFDocument } from 'pdf-lib'
@@ -30,6 +33,8 @@ import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileDropzone } from '@/components/file-manager/FileDropzone'
 import { useToast } from '@/hooks/use-toast'
+import { useOCR } from '@/hooks/useOCR'
+import { usePdfDocument } from '@/hooks/usePdfDocument'
 import {
   cn,
   formatFileSize,
@@ -39,11 +44,28 @@ import {
 } from '@/lib/utils'
 import { convertPDF, extractText, getSupportedFormats } from '@pdflover/pdf-core'
 import type { ProgressInfo, ConvertOutputFormat, ImageQuality } from '@pdflover/shared'
+import type { OCRLanguageCode } from '@pdflover/pdf-core'
 
 /**
  * Conversion mode
  */
 type ConversionMode = 'pdf-to-image' | 'image-to-pdf' | 'pdf-to-text'
+
+/**
+ * OCR language options for the UI
+ */
+const OCR_LANGUAGE_OPTIONS: Array<{ code: OCRLanguageCode; name: string }> = [
+  { code: 'eng', name: 'English' },
+  { code: 'spa', name: 'Spanish' },
+  { code: 'fra', name: 'French' },
+  { code: 'deu', name: 'German' },
+  { code: 'ita', name: 'Italian' },
+  { code: 'por', name: 'Portuguese' },
+  { code: 'jpn', name: 'Japanese' },
+  { code: 'chi_sim', name: 'Chinese' },
+  { code: 'kor', name: 'Korean' },
+  { code: 'ara', name: 'Arabic' },
+]
 
 /**
  * Output format options for PDF to Image
@@ -99,6 +121,7 @@ export interface ConvertPanelProps {
 export function ConvertPanel({ className }: ConvertPanelProps) {
   const [mode, setMode] = React.useState<ConversionMode>('pdf-to-image')
   const [file, setFile] = React.useState<File | null>(null)
+  const [fileBuffer, setFileBuffer] = React.useState<ArrayBuffer | null>(null)
   const [imageFiles, setImageFiles] = React.useState<File[]>([])
   const [pageCount, setPageCount] = React.useState<number>(0)
   const [outputFormat, setOutputFormat] = React.useState<ConvertOutputFormat>('png')
@@ -106,7 +129,27 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
   const [progressStage, setProgressStage] = React.useState('')
+  const [useOCRForText, setUseOCRForText] = React.useState(false)
+  const [ocrLanguages, setOcrLanguages] = React.useState<OCRLanguageCode[]>(['eng'])
+  const [isScannedPdf, setIsScannedPdf] = React.useState<boolean | null>(null)
   const { toast } = useToast()
+
+  const {
+    state: ocrState,
+    progress: ocrProgress,
+    recognizePDF,
+    checkIfScanned,
+    reset: resetOCR,
+  } = useOCR({
+    languages: ocrLanguages,
+    enableCache: true,
+  })
+
+  const {
+    pdfDocument,
+    loadFromArrayBuffer,
+    closeDocument,
+  } = usePdfDocument()
 
   const currentQuality = QUALITY_LEVELS[qualityLevel] ?? QUALITY_LEVELS[1]!
   const supportedFormats = getSupportedFormats()
@@ -116,9 +159,14 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
    */
   React.useEffect(() => {
     setFile(null)
+    setFileBuffer(null)
     setImageFiles([])
     setPageCount(0)
-  }, [mode])
+    setIsScannedPdf(null)
+    setUseOCRForText(false)
+    closeDocument()
+    resetOCR()
+  }, [mode, closeDocument, resetOCR])
 
   /**
    * Handle PDF file upload
@@ -128,11 +176,18 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
     if (!pdfFile) return
 
     setFile(pdfFile)
+    setIsScannedPdf(null)
 
     try {
       const buffer = await pdfFile.arrayBuffer()
+      setFileBuffer(buffer)
       const doc = await PDFDocument.load(buffer, { ignoreEncryption: true })
       setPageCount(doc.getPageCount())
+
+      // Load for PDF.js to check if scanned (for text extraction mode)
+      if (mode === 'pdf-to-text') {
+        await loadFromArrayBuffer(buffer)
+      }
     } catch (error) {
       toast({
         title: 'Error reading PDF',
@@ -140,8 +195,24 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
         variant: 'destructive',
       })
       setFile(null)
+      setFileBuffer(null)
     }
-  }, [toast])
+  }, [toast, mode, loadFromArrayBuffer])
+
+  /**
+   * Check if PDF is scanned when loaded for text extraction
+   */
+  React.useEffect(() => {
+    if (pdfDocument && mode === 'pdf-to-text') {
+      checkIfScanned(pdfDocument).then((isScanned) => {
+        setIsScannedPdf(isScanned)
+        // Auto-enable OCR for scanned PDFs
+        if (isScanned) {
+          setUseOCRForText(true)
+        }
+      })
+    }
+  }, [pdfDocument, mode, checkIfScanned])
 
   /**
    * Handle image files upload
@@ -166,7 +237,25 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
    */
   const handleClearFile = React.useCallback(() => {
     setFile(null)
+    setFileBuffer(null)
     setPageCount(0)
+    setIsScannedPdf(null)
+    setUseOCRForText(false)
+    closeDocument()
+    resetOCR()
+  }, [closeDocument, resetOCR])
+
+  /**
+   * Toggle OCR language selection
+   */
+  const handleOcrLanguageToggle = React.useCallback((code: OCRLanguageCode) => {
+    setOcrLanguages((prev) => {
+      if (prev.includes(code)) {
+        if (prev.length === 1) return prev // Keep at least one language
+        return prev.filter((l) => l !== code)
+      }
+      return [...prev, code]
+    })
   }, [])
 
   /**
@@ -329,22 +418,40 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
   }, [imageFiles, toast])
 
   /**
-   * Extract text from PDF
+   * Extract text from PDF (with optional OCR)
    */
   const handlePdfToText = React.useCallback(async () => {
     if (!file) return
 
     setIsProcessing(true)
     setProgress(0)
-    setProgressStage('Extracting text from PDF...')
 
     try {
-      const buffer = await file.arrayBuffer()
-      const text = await extractText(buffer)
+      let text: string | null = null
 
-      if (text) {
+      if (useOCRForText && pdfDocument) {
+        // Use OCR for text extraction
+        setProgressStage('Running OCR on PDF...')
+
+        const ocrResult = await recognizePDF(pdfDocument)
+        if (ocrResult) {
+          text = ocrResult.fullText
+
+          toast({
+            title: 'OCR Complete',
+            description: `Extracted text with ${Math.round(ocrResult.averageConfidence)}% confidence`,
+          })
+        }
+      } else {
+        // Use regular text extraction
+        setProgressStage('Extracting text from PDF...')
+        const buffer = await file.arrayBuffer()
+        text = await extractText(buffer)
+      }
+
+      if (text && text.trim().length > 0) {
         const blob = new Blob([text], { type: 'text/plain' })
-        const filename = file.name.replace(/\.pdf$/i, '.txt')
+        const filename = file.name.replace(/\.pdf$/i, useOCRForText ? '_ocr.txt' : '.txt')
         downloadBlob(blob, filename)
 
         toast({
@@ -354,7 +461,9 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
       } else {
         toast({
           title: 'No text found',
-          description: 'The PDF does not contain extractable text or is image-based.',
+          description: useOCRForText
+            ? 'OCR could not extract text from the document.'
+            : 'The PDF does not contain extractable text. Try enabling OCR.',
           variant: 'destructive',
         })
       }
@@ -370,7 +479,7 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
       setProgress(0)
       setProgressStage('')
     }
-  }, [file, toast])
+  }, [file, useOCRForText, pdfDocument, recognizePDF, toast])
 
   /**
    * Handle conversion based on mode
@@ -594,69 +703,163 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
                 maxFiles={1}
               />
             ) : (
-              <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
-                <div className="flex-shrink-0 w-12 h-16 bg-white dark:bg-surface-700 rounded flex items-center justify-center">
-                  <FileText className="h-6 w-6 text-surface-400" />
+              <>
+                <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
+                  <div className="flex-shrink-0 w-12 h-16 bg-white dark:bg-surface-700 rounded flex items-center justify-center">
+                    <FileText className="h-6 w-6 text-surface-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-surface-900 dark:text-white truncate">
+                      {file.name}
+                    </p>
+                    <p className="text-xs text-surface-500 dark:text-surface-400">
+                      {formatFileSize(file.size)} - {pageCount} pages
+                    </p>
+                    {isScannedPdf !== null && (
+                      <p className={cn(
+                        'text-xs mt-1',
+                        isScannedPdf
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-green-600 dark:text-green-400'
+                      )}>
+                        {isScannedPdf
+                          ? 'Scanned document detected - OCR enabled'
+                          : 'Text-based PDF'}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleClearFile}
+                    disabled={isProcessing || ocrState === 'processing'}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-surface-900 dark:text-white truncate">
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-surface-500 dark:text-surface-400">
-                    {formatFileSize(file.size)} - {pageCount} pages
-                  </p>
+
+                {/* OCR Toggle */}
+                <div className="flex items-center gap-3 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
+                  <ScanLine className="h-5 w-5 text-indigo-500" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-surface-900 dark:text-white">
+                      Use OCR (Optical Character Recognition)
+                    </p>
+                    <p className="text-xs text-surface-500 dark:text-surface-400">
+                      Enable for scanned documents or images
+                    </p>
+                  </div>
+                  <Button
+                    variant={useOCRForText ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setUseOCRForText(!useOCRForText)}
+                    disabled={isProcessing || ocrState === 'processing'}
+                  >
+                    {useOCRForText ? 'Enabled' : 'Disabled'}
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleClearFile}
-                  disabled={isProcessing}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+
+                {/* OCR Language Selector */}
+                {useOCRForText && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Languages className="h-4 w-4 text-surface-500" />
+                      <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                        OCR Languages
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {OCR_LANGUAGE_OPTIONS.map((lang) => (
+                        <Button
+                          key={lang.code}
+                          variant={ocrLanguages.includes(lang.code) ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => handleOcrLanguageToggle(lang.code)}
+                          disabled={isProcessing || ocrState === 'processing'}
+                          className="text-xs"
+                        >
+                          {lang.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Info Note */}
+            {!useOCRForText && (
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  Note: Text extraction works best with text-based PDFs. Enable OCR above
+                  for scanned documents or image-based PDFs.
+                </p>
               </div>
             )}
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                Note: Text extraction works best with text-based PDFs. Scanned documents
-                may require OCR which is available in the full application.
-              </p>
-            </div>
+
+            {useOCRForText && (
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  OCR processing happens entirely in your browser. No data is sent to any server.
+                  Processing time depends on document size.
+                </p>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 
         {/* Progress Indicator */}
-        {isProcessing && (
+        {(isProcessing || ocrState === 'processing' || ocrState === 'initializing') && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-surface-600 dark:text-surface-400">
-                {progressStage || 'Processing...'}
+                {ocrState === 'processing' || ocrState === 'initializing'
+                  ? ocrProgress.stage || 'Processing OCR...'
+                  : progressStage || 'Processing...'}
               </span>
-              <span className="font-medium">{Math.round(progress)}%</span>
+              <span className="font-medium">
+                {ocrState === 'processing' || ocrState === 'initializing'
+                  ? Math.round(ocrProgress.percentage)
+                  : Math.round(progress)}%
+              </span>
             </div>
-            <Progress value={progress} className="h-2" />
+            <Progress
+              value={ocrState === 'processing' || ocrState === 'initializing'
+                ? ocrProgress.percentage
+                : progress}
+              className="h-2"
+            />
+            {ocrProgress.currentPage && ocrProgress.totalPages && (
+              <p className="text-xs text-surface-500 dark:text-surface-400 text-center">
+                Page {ocrProgress.currentPage} of {ocrProgress.totalPages}
+              </p>
+            )}
           </div>
         )}
 
         {/* Action Button */}
         <Button
           onClick={handleConvert}
-          disabled={!canConvert || isProcessing}
+          disabled={!canConvert || isProcessing || ocrState === 'processing' || ocrState === 'initializing'}
           className="w-full"
         >
-          {isProcessing ? (
+          {isProcessing || ocrState === 'processing' || ocrState === 'initializing' ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Converting...
+              {useOCRForText && mode === 'pdf-to-text' ? 'Running OCR...' : 'Converting...'}
             </>
           ) : (
             <>
-              {mode === 'image-to-pdf' && imageFiles.length > 1 ? (
+              {mode === 'pdf-to-text' && useOCRForText ? (
+                <ScanLine className="h-4 w-4 mr-2" />
+              ) : mode === 'image-to-pdf' && imageFiles.length > 1 ? (
                 <Package className="h-4 w-4 mr-2" />
               ) : (
                 <Download className="h-4 w-4 mr-2" />
               )}
-              Convert & Download
+              {mode === 'pdf-to-text' && useOCRForText
+                ? 'Extract with OCR'
+                : 'Convert & Download'}
             </>
           )}
         </Button>
