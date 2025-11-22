@@ -7,7 +7,15 @@ import {
   CompressPage,
   ConvertPage,
   Dashboard,
+  SecurityPage,
+  WatermarkPage,
+  SignaturePage,
 } from '@/pages';
+import {
+  InstallPrompt,
+  UpdateNotification,
+  OfflineIndicator,
+} from '@/components/pwa';
 
 function PlaceholderPage({ title }: { title: string }) {
   return (
@@ -34,12 +42,21 @@ function PlaceholderPage({ title }: { title: string }) {
 function App() {
   return (
     <BrowserRouter>
+      {/* PWA Components */}
+      <OfflineIndicator variant="toast" position="bottom" showOnlineNotification />
+      <UpdateNotification position="bottom" />
+      <InstallPrompt variant="banner" showDelay={5000} />
+
+      {/* Routes */}
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/merge" element={<MergePage />} />
         <Route path="/split" element={<SplitPage />} />
         <Route path="/compress" element={<CompressPage />} />
         <Route path="/convert" element={<ConvertPage />} />
+        <Route path="/security" element={<SecurityPage />} />
+        <Route path="/watermark" element={<WatermarkPage />} />
+        <Route path="/signature" element={<SignaturePage />} />
         <Route path="/chat" element={<PlaceholderPage title="AI Chat" />} />
         <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
       </Routes>
