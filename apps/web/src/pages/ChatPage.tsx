@@ -1,6 +1,7 @@
 /**
  * Chat with PDF Page
  * Side-by-side layout with PDF viewer and chat panel
+ * Integrates RAG pipeline for document-aware conversations
  */
 
 import * as React from 'react'
@@ -20,6 +21,7 @@ import { useDocumentTypeDetection } from '@/components/chat/SuggestedQuestions'
 import { useChatStore } from '@/store/chat-store'
 import { usePDFStore } from '@/store/pdf-store'
 import { useSettingsStore } from '@/store/settings-store'
+import { useRAG } from '@/hooks/useRAG'
 import { cn } from '@/lib/utils'
 import {
   generateLocalResponse,
@@ -30,15 +32,7 @@ import {
   sendChatCompletion,
   streamChatCompletion,
 } from '@/lib/ai/openrouter'
-import {
-  vectorStore,
-  chunkText,
-  generateEmbeddings,
-  searchSimilarChunks,
-  buildContextFromResults,
-  resultsToCitations,
-  initializeEmbeddingModel,
-} from '@/lib/ai/embeddings'
+import { queryWithContext } from '@/lib/ai/rag'
 import type { Citation, Message } from '@pdflover/shared'
 
 /**
@@ -196,11 +190,23 @@ export function ChatPage() {
     ai: aiSettings,
   } = useSettingsStore()
 
+  // RAG hook for document indexing and querying
+  const {
+    indexingState,
+    indexDocument: indexDocumentRAG,
+    query: queryRAG,
+    checkIndexed,
+  } = useRAG({
+    chunkSize: aiSettings.ragChunkSize,
+    chunkOverlap: aiSettings.ragChunkOverlap,
+    topK: aiSettings.ragTopK,
+    minSimilarity: 0.3,
+    persist: true,
+  })
+
   // Local state
   const [chatOpen, setChatOpen] = React.useState(true)
-  const [isIndexing, setIsIndexing] = React.useState(false)
   const [highlightedCitation, setHighlightedCitation] = React.useState<Citation | null>(null)
-  const [modelReady, setModelReady] = React.useState(false)
 
   // Detect document type from content
   const documentText = currentDocument?.pages
@@ -225,57 +231,17 @@ export function ChatPage() {
 
   // Index document for RAG when loaded
   React.useEffect(() => {
-    async function indexDocument() {
-      if (!currentDocument) return
-
-      setIsIndexing(true)
-      try {
-        // Initialize embedding model
-        await initializeEmbeddingModel()
-
-        // Extract and chunk text from all pages
-        const allChunks = currentDocument.pages.flatMap((page) => {
-          const text = page.textContent || ''
-          if (!text.trim()) return []
-          return chunkText(
-            text,
-            currentDocument.id,
-            page.pageNumber,
-            aiSettings.ragChunkSize,
-            aiSettings.ragChunkOverlap
-          )
-        })
-
-        if (allChunks.length > 0) {
-          // Generate embeddings for all chunks
-          const embeddings = await generateEmbeddings(
-            allChunks.map((c) => c.content)
-          )
-
-          // Attach embeddings to chunks
-          for (let i = 0; i < allChunks.length; i++) {
-            allChunks[i].embedding = embeddings.embeddings[i]
-          }
-
-          // Store in vector store
-          vectorStore.addDocument(
-            currentDocument.id,
-            currentDocument.name,
-            allChunks
-          )
-        }
-
-        setModelReady(true)
-      } catch (error) {
-        console.error('Failed to index document:', error)
-        setError('Failed to index document for chat')
-      } finally {
-        setIsIndexing(false)
-      }
+    if (currentDocument && !indexingState.isIndexed && !indexingState.isIndexing) {
+      indexDocumentRAG({
+        id: currentDocument.id,
+        name: currentDocument.name,
+        pages: currentDocument.pages.map((page) => ({
+          pageNumber: page.pageNumber,
+          textContent: page.textContent,
+        })),
+      })
     }
-
-    indexDocument()
-  }, [currentDocument, aiSettings.ragChunkSize, aiSettings.ragChunkOverlap, setError])
+  }, [currentDocument, indexingState.isIndexed, indexingState.isIndexing, indexDocumentRAG])
 
   // Initialize AI model
   React.useEffect(() => {
@@ -303,16 +269,14 @@ export function ChatPage() {
 
       try {
         // Get relevant context using RAG
-        const chunks = vectorStore.getDocumentChunks(currentDocument.id)
-        const searchResults = await searchSimilarChunks(
-          content,
-          chunks,
-          aiSettings.ragTopK,
-          0.3
-        )
+        const ragResult = await queryWithContext(content, currentDocument.id, {
+          topK: aiSettings.ragTopK,
+          minSimilarity: 0.3,
+          maxContextLength: 4000,
+        })
 
-        const context = buildContextFromResults(searchResults)
-        const citations = resultsToCitations(searchResults, currentDocument.name)
+        const { context } = ragResult
+        const citations = context.citations
 
         // Build messages array for API
         const apiMessages: Message[] = [
@@ -325,15 +289,28 @@ export function ChatPage() {
           },
         ]
 
+        // Build system prompt with RAG context
+        const systemPrompt = context.contextText
+          ? `You are a helpful AI assistant that answers questions about documents.
+When answering, reference specific parts of the provided context and include page numbers as citations.
+If you cannot find the answer in the context, say so clearly.
+
+## Document Context
+${context.contextText}
+
+## Instructions
+- Answer based on the context above
+- Include page number citations when referencing specific information (e.g., [Page 3])
+- Be concise and accurate`
+          : undefined
+
         // Generate response based on provider
         if (aiSettings.provider === 'local') {
           if (aiSettings.enableStreaming) {
             // Streaming response
             for await (const chunk of generateLocalResponseStream(apiMessages, {
               modelId: aiSettings.localModelId,
-              systemPrompt: context
-                ? `Answer based on this context:\n${context}`
-                : undefined,
+              systemPrompt,
               temperature: aiSettings.defaultTemperature,
               maxTokens: aiSettings.defaultMaxTokens,
             })) {
@@ -346,9 +323,7 @@ export function ChatPage() {
             // Non-streaming response
             const response = await generateLocalResponse(apiMessages, {
               modelId: aiSettings.localModelId,
-              systemPrompt: context
-                ? `Answer based on this context:\n${context}`
-                : undefined,
+              systemPrompt,
               temperature: aiSettings.defaultTemperature,
               maxTokens: aiSettings.defaultMaxTokens,
             })
@@ -374,9 +349,7 @@ export function ChatPage() {
               aiSettings.openRouterApiKey,
               {
                 modelId: aiSettings.openRouterModelId,
-                systemPrompt: context
-                  ? `Answer based on this context:\n${context}`
-                  : undefined,
+                systemPrompt,
                 temperature: aiSettings.defaultTemperature,
                 maxTokens: aiSettings.defaultMaxTokens,
               }
@@ -393,9 +366,7 @@ export function ChatPage() {
               aiSettings.openRouterApiKey,
               {
                 modelId: aiSettings.openRouterModelId,
-                systemPrompt: context
-                  ? `Answer based on this context:\n${context}`
-                  : undefined,
+                systemPrompt,
                 temperature: aiSettings.defaultTemperature,
                 maxTokens: aiSettings.defaultMaxTokens,
               }
@@ -470,15 +441,11 @@ export function ChatPage() {
     navigate('/')
   }, [navigate])
 
-  // Show loading state
-  if (isPdfLoading || isIndexing) {
+  // Show loading state (only block UI if PDF is loading, not during indexing)
+  if (isPdfLoading) {
     return (
       <LoadingState
-        message={
-          isPdfLoading
-            ? 'Loading document...'
-            : 'Indexing document for chat...'
-        }
+        message="Loading document..."
       />
     )
   }
@@ -535,6 +502,19 @@ export function ChatPage() {
         collapsible
         position="right"
         width={400}
+        indexingProgress={indexingState.progress}
+        isDocumentIndexed={indexingState.isIndexed}
+        indexedChunkCount={indexingState.chunkCount}
+        onReindex={() => {
+          indexDocumentRAG({
+            id: currentDocument.id,
+            name: currentDocument.name,
+            pages: currentDocument.pages.map((page) => ({
+              pageNumber: page.pageNumber,
+              textContent: page.textContent,
+            })),
+          }, true)
+        }}
       />
 
       {/* Floating chat button (when collapsed) */}

@@ -1,6 +1,7 @@
 /**
  * Chat Panel Component
  * Main chat interface with message list, input, and AI controls
+ * Includes RAG integration for document-aware conversations
  */
 
 import * as React from 'react'
@@ -15,6 +16,11 @@ import {
   Cloud,
   MessageSquare,
   Bot,
+  Loader2,
+  RefreshCw,
+  Database,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -32,6 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { useChatStore } from '@/store/chat-store'
 import { useSettingsStore } from '@/store/settings-store'
@@ -39,7 +46,8 @@ import { useSettingsStore } from '@/store/settings-store'
 import { MessageBubble, StreamingMessage } from './MessageBubble'
 import { ChatInput } from './ChatInput'
 import { DocumentType } from './SuggestedQuestions'
-import type { Message, Citation, AIProvider } from '@pdflover/shared'
+import type { Citation, AIProvider } from '@pdflover/shared'
+import type { IndexingProgress } from '@/lib/ai/rag'
 
 export interface ChatPanelProps {
   /** Whether the panel is open */
@@ -64,6 +72,14 @@ export interface ChatPanelProps {
   width?: number | string
   /** Additional CSS classes */
   className?: string
+  /** RAG indexing state */
+  indexingProgress?: IndexingProgress | null
+  /** Whether document is indexed */
+  isDocumentIndexed?: boolean
+  /** Number of indexed chunks */
+  indexedChunkCount?: number
+  /** Callback to re-index document */
+  onReindex?: () => void
 }
 
 /**
@@ -93,6 +109,10 @@ export function ChatPanel({
   position = 'right',
   width = 400,
   className,
+  indexingProgress,
+  isDocumentIndexed = false,
+  indexedChunkCount = 0,
+  onReindex,
 }: ChatPanelProps) {
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const messagesContainerRef = React.useRef<HTMLDivElement>(null)
@@ -113,7 +133,6 @@ export function ChatPanel({
   const {
     ai: aiSettings,
     setAIProvider,
-    updateAISettings,
   } = useSettingsStore()
 
   // Local state
@@ -258,76 +277,153 @@ export function ChatPanel({
       style={{ width: typeof width === 'number' ? `${width}px` : width }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          {CollapseButton}
-          <Bot className="h-5 w-5 text-primary" />
-          <span className="font-semibold">Chat with PDF</span>
-        </div>
+      <div className="flex flex-col border-b">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-2">
+            {CollapseButton}
+            <Bot className="h-5 w-5 text-primary" />
+            <span className="font-semibold">Chat with PDF</span>
+          </div>
 
-        <div className="flex items-center gap-1">
-          {/* AI Provider Toggle */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={aiSettings.provider === 'local' ? 'default' : 'outline'}
-                  size="sm"
-                  className="h-8 gap-1.5"
-                  onClick={() =>
-                    handleProviderChange(
-                      aiSettings.provider === 'local' ? 'openrouter' : 'local'
-                    )
-                  }
-                >
-                  {aiSettings.provider === 'local' ? (
-                    <>
-                      <Cpu className="h-3.5 w-3.5" />
-                      <span className="text-xs">Local</span>
-                    </>
+          <div className="flex items-center gap-1">
+            {/* RAG Status Indicator */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs">
+                    {indexingProgress && indexingProgress.stage !== 'complete' && indexingProgress.stage !== 'error' ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        <span className="text-muted-foreground">Indexing...</span>
+                      </>
+                    ) : indexingProgress?.stage === 'error' ? (
+                      <>
+                        <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                        <span className="text-destructive">Error</span>
+                      </>
+                    ) : isDocumentIndexed ? (
+                      <>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                        <span className="text-green-600">{indexedChunkCount} chunks</span>
+                      </>
+                    ) : (
+                      <>
+                        <Database className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-muted-foreground">Not indexed</span>
+                      </>
+                    )}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {indexingProgress && indexingProgress.stage !== 'complete' && indexingProgress.stage !== 'error' ? (
+                    <p>Indexing document for RAG ({indexingProgress.progress}%)</p>
+                  ) : indexingProgress?.stage === 'error' ? (
+                    <p>Indexing failed: {indexingProgress.error}</p>
+                  ) : isDocumentIndexed ? (
+                    <p>Document indexed with {indexedChunkCount} chunks for semantic search</p>
                   ) : (
-                    <>
-                      <Cloud className="h-3.5 w-3.5" />
-                      <span className="text-xs">Cloud</span>
-                    </>
+                    <p>Document not yet indexed for RAG</p>
                   )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>
-                  {aiSettings.provider === 'local'
-                    ? 'Using local AI (private, runs in browser)'
-                    : 'Using cloud AI (requires API key)'}
-                </p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
 
-          {/* Settings dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8">
-                <Settings2 className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Chat Options</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleExport} disabled={messages.length === 0}>
-                <Download className="mr-2 h-4 w-4" />
-                Export conversation
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={handleClear}
-                disabled={messages.length === 0}
-                className="text-destructive"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Clear conversation
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            {/* Re-index button */}
+            {isDocumentIndexed && onReindex && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={onReindex}
+                      disabled={indexingProgress?.stage !== 'complete' && indexingProgress?.stage !== 'error' && indexingProgress !== null}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Re-index document</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* AI Provider Toggle */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={aiSettings.provider === 'local' ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={() =>
+                      handleProviderChange(
+                        aiSettings.provider === 'local' ? 'openrouter' : 'local'
+                      )
+                    }
+                  >
+                    {aiSettings.provider === 'local' ? (
+                      <>
+                        <Cpu className="h-3.5 w-3.5" />
+                        <span className="text-xs">Local</span>
+                      </>
+                    ) : (
+                      <>
+                        <Cloud className="h-3.5 w-3.5" />
+                        <span className="text-xs">Cloud</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>
+                    {aiSettings.provider === 'local'
+                      ? 'Using local AI (private, runs in browser)'
+                      : 'Using cloud AI (requires API key)'}
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* Settings dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Chat Options</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleExport} disabled={messages.length === 0}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Export conversation
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleClear}
+                  disabled={messages.length === 0}
+                  className="text-destructive"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clear conversation
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
+
+        {/* Indexing Progress Bar */}
+        {indexingProgress && indexingProgress.stage !== 'complete' && indexingProgress.stage !== 'error' && (
+          <div className="px-4 pb-2">
+            <Progress value={indexingProgress.progress} className="h-1" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {getIndexingStageLabel(indexingProgress.stage)}
+              {indexingProgress.totalChunks && ` (${indexingProgress.totalChunks} chunks)`}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Messages */}
@@ -419,6 +515,28 @@ export function ChatPanel({
       </div>
     </div>
   )
+}
+
+/**
+ * Get human-readable label for indexing stage
+ */
+function getIndexingStageLabel(stage: string): string {
+  switch (stage) {
+    case 'initializing':
+      return 'Initializing embedding model...'
+    case 'chunking':
+      return 'Splitting document into chunks...'
+    case 'embedding':
+      return 'Generating embeddings...'
+    case 'storing':
+      return 'Storing embeddings...'
+    case 'complete':
+      return 'Indexing complete'
+    case 'error':
+      return 'Indexing failed'
+    default:
+      return 'Processing...'
+  }
 }
 
 /**

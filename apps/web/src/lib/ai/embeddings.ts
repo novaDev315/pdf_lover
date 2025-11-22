@@ -383,26 +383,118 @@ export function resultsToCitations(
 }
 
 /**
- * In-memory vector store for document embeddings
+ * IndexedDB-backed vector store for document embeddings
+ * Provides persistent storage with in-memory caching for performance
  */
 export class VectorStore {
   private chunks: Map<string, TextChunk[]> = new Map()
   private documentNames: Map<string, string> = new Map()
+  private indexedDocuments: Set<string> = new Set()
+  private db: import('@/lib/storage').PDFLoverDB | null = null
 
   /**
-   * Add chunks for a document
+   * Initialize database connection for persistence
+   */
+  async initialize(): Promise<void> {
+    if (!this.db) {
+      const { db } = await import('@/lib/storage')
+      this.db = db
+    }
+  }
+
+  /**
+   * Add chunks for a document (in-memory and optionally persisted)
    */
   addDocument(documentId: string, documentName: string, chunks: TextChunk[]): void {
     this.chunks.set(documentId, chunks)
     this.documentNames.set(documentId, documentName)
+    this.indexedDocuments.add(documentId)
   }
 
   /**
-   * Remove a document
+   * Persist document embeddings to IndexedDB
    */
-  removeDocument(documentId: string): void {
+  async persistDocument(documentId: string): Promise<void> {
+    await this.initialize()
+    const chunks = this.chunks.get(documentId)
+    if (!chunks || !this.db) return
+
+    const embeddings = chunks
+      .filter((c) => c.embedding)
+      .map((c) => c.embedding!)
+
+    const chunkInfo = chunks.map((c) => ({
+      chunkId: c.id,
+      pageNumber: c.pageNumber,
+    }))
+
+    await this.db.saveEmbeddings(documentId, embeddings, chunkInfo)
+  }
+
+  /**
+   * Load document embeddings from IndexedDB
+   */
+  async loadDocument(
+    documentId: string,
+    documentName: string,
+    chunks: TextChunk[]
+  ): Promise<boolean> {
+    await this.initialize()
+    if (!this.db) return false
+
+    try {
+      const storedEmbeddings = await this.db.getEmbeddings(documentId)
+      if (storedEmbeddings.length === 0) return false
+
+      // Create a map of chunkId to embedding
+      const embeddingMap = new Map<string, number[]>()
+      for (const stored of storedEmbeddings) {
+        embeddingMap.set(stored.chunkId, stored.embedding)
+      }
+
+      // Attach embeddings to chunks
+      let attachedCount = 0
+      for (const chunk of chunks) {
+        const embedding = embeddingMap.get(chunk.id)
+        if (embedding) {
+          chunk.embedding = embedding
+          attachedCount++
+        }
+      }
+
+      if (attachedCount > 0) {
+        this.addDocument(documentId, documentName, chunks)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error('Failed to load embeddings from IndexedDB:', error)
+      return false
+    }
+  }
+
+  /**
+   * Check if a document is indexed
+   */
+  isDocumentIndexed(documentId: string): boolean {
+    return this.indexedDocuments.has(documentId)
+  }
+
+  /**
+   * Remove a document from memory and optionally from storage
+   */
+  async removeDocument(documentId: string, removeFromStorage = false): Promise<void> {
     this.chunks.delete(documentId)
     this.documentNames.delete(documentId)
+    this.indexedDocuments.delete(documentId)
+
+    if (removeFromStorage) {
+      await this.initialize()
+      if (this.db) {
+        await this.db.deleteEmbeddings(documentId)
+      }
+    }
   }
 
   /**
@@ -463,11 +555,12 @@ export class VectorStore {
   }
 
   /**
-   * Clear all data
+   * Clear all data from memory
    */
   clear(): void {
     this.chunks.clear()
     this.documentNames.clear()
+    this.indexedDocuments.clear()
   }
 
   /**
@@ -487,12 +580,118 @@ export class VectorStore {
     }
     return count
   }
+
+  /**
+   * Get indexed document IDs
+   */
+  get indexedDocumentIds(): string[] {
+    return Array.from(this.indexedDocuments)
+  }
 }
 
 /**
  * Global vector store instance
  */
 export const vectorStore = new VectorStore()
+
+/**
+ * Index a document by chunking text and generating embeddings
+ * @param documentId - The document ID
+ * @param documentName - The document name for citations
+ * @param pages - Array of page objects with pageNumber and textContent
+ * @param options - Chunking options
+ * @param onProgress - Progress callback
+ * @returns Array of chunks with embeddings
+ */
+export async function indexDocument(
+  documentId: string,
+  documentName: string,
+  pages: Array<{ pageNumber: number; textContent: string }>,
+  options: {
+    chunkSize?: number
+    chunkOverlap?: number
+    persist?: boolean
+  } = {},
+  onProgress?: (progress: { stage: string; progress: number; total?: number }) => void
+): Promise<TextChunk[]> {
+  const { chunkSize = 512, chunkOverlap = 50, persist = true } = options
+
+  onProgress?.({ stage: 'initializing', progress: 0 })
+
+  // Initialize embedding model
+  await initializeEmbeddingModel()
+
+  onProgress?.({ stage: 'chunking', progress: 10 })
+
+  // Extract and chunk text from all pages
+  const allChunks: TextChunk[] = []
+  for (const page of pages) {
+    const text = page.textContent || ''
+    if (!text.trim()) continue
+
+    const pageChunks = chunkText(
+      text,
+      documentId,
+      page.pageNumber,
+      chunkSize,
+      chunkOverlap
+    )
+    allChunks.push(...pageChunks)
+  }
+
+  if (allChunks.length === 0) {
+    onProgress?.({ stage: 'complete', progress: 100 })
+    return []
+  }
+
+  onProgress?.({ stage: 'embedding', progress: 20, total: allChunks.length })
+
+  // Generate embeddings in batches
+  const batchSize = 8
+  for (let i = 0; i < allChunks.length; i += batchSize) {
+    const batch = allChunks.slice(i, i + batchSize)
+    const embeddings = await generateEmbeddings(batch.map((c) => c.content))
+
+    for (let j = 0; j < batch.length; j++) {
+      batch[j].embedding = embeddings.embeddings[j]
+    }
+
+    const progress = 20 + Math.floor(((i + batch.length) / allChunks.length) * 70)
+    onProgress?.({ stage: 'embedding', progress, total: allChunks.length })
+  }
+
+  onProgress?.({ stage: 'storing', progress: 90 })
+
+  // Store in vector store
+  vectorStore.addDocument(documentId, documentName, allChunks)
+
+  // Persist to IndexedDB if requested
+  if (persist) {
+    await vectorStore.persistDocument(documentId)
+  }
+
+  onProgress?.({ stage: 'complete', progress: 100 })
+
+  return allChunks
+}
+
+/**
+ * Search for similar chunks across indexed documents
+ * @param query - The search query
+ * @param options - Search options
+ * @returns Search results with citations
+ */
+export async function searchSimilar(
+  query: string,
+  options: {
+    documentIds?: string[]
+    topK?: number
+    minSimilarity?: number
+  } = {}
+): Promise<{ results: SimilarityResult[]; citations: Citation[] }> {
+  const { documentIds, topK = 5, minSimilarity = 0.3 } = options
+  return vectorStore.search(query, documentIds, topK, minSimilarity)
+}
 
 /**
  * Unload embedding model to free memory

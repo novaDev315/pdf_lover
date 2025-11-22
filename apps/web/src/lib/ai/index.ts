@@ -45,8 +45,27 @@ export {
   VectorStore,
   vectorStore,
   unloadEmbeddingModel,
+  indexDocument,
+  searchSimilar,
 } from './embeddings'
 export type {
   EmbeddingLoadProgressCallback,
   SimilarityResult,
 } from './embeddings'
+
+// RAG Pipeline
+export {
+  createDocumentIndex,
+  queryWithContext,
+  generateRAGResponse,
+  generateRAGResponseStream,
+  buildPromptWithContext,
+  isDocumentIndexed,
+  getDocumentChunkCount,
+  clearDocumentIndex,
+  type RAGContext,
+  type RAGQueryResult,
+  type RAGResponseOptions,
+  type IndexingProgress,
+  type PDFDocument,
+} from './rag'
