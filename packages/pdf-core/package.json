@@ -1,0 +1,58 @@
+{
+  "name": "@pdflover/pdf-core",
+  "version": "0.1.0",
+  "description": "PDF processing library for PDFLover - merge, split, compress, convert",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./merge": {
+      "types": "./dist/merge.d.ts",
+      "import": "./dist/merge.js"
+    },
+    "./split": {
+      "types": "./dist/split.d.ts",
+      "import": "./dist/split.js"
+    },
+    "./compress": {
+      "types": "./dist/compress.d.ts",
+      "import": "./dist/compress.js"
+    },
+    "./convert": {
+      "types": "./dist/convert.d.ts",
+      "import": "./dist/convert.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src/__tests__",
+    "test:watch": "vitest --dir src/__tests__",
+    "test:coverage": "vitest run --dir src/__tests__ --coverage"
+  },
+  "dependencies": {
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^4.7.76"
+  },
+  "devDependencies": {
+    "@pdflover/shared": "workspace:*",
+    "typescript": "^5.6.0"
+  },
+  "peerDependencies": {
+    "@pdflover/shared": "workspace:*"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}
