@@ -5,8 +5,10 @@
 
 import * as React from 'react';
 import { usePdfDocument, type PdfMetadata } from '@/hooks/usePdfDocument';
+import { useTextSearch, type SearchResult } from '@/hooks/useTextSearch';
 import { EditToolbar, type ToolType } from './EditToolbar';
 import { PageThumbnails } from './PageThumbnails';
+import { SearchPanel } from './SearchPanel';
 import { type ZoomMode } from './ZoomControls';
 import { cn } from '@/lib/utils';
 import { downloadBlob, arrayBufferToBlob } from '@/lib/utils';
@@ -26,6 +28,7 @@ const KEYBOARD_SHORTCUTS = {
   handTool: ['h', 'H'] as string[],
   textTool: ['t', 'T'] as string[],
   highlightTool: ['l', 'L'] as string[],
+  search: ['f'] as string[],
 };
 
 /**
@@ -48,6 +51,8 @@ export interface PdfViewerProps {
   showThumbnails?: boolean;
   /** Whether to enable page reordering */
   enableReorder?: boolean;
+  /** Whether to enable search functionality */
+  enableSearch?: boolean;
   /** Callback when document is loaded */
   onLoad?: (metadata: PdfMetadata) => void;
   /** Callback when loading fails */
@@ -72,6 +77,8 @@ interface PageCanvasProps {
   rotation: 0 | 90 | 180 | 270;
   isVisible: boolean;
   onRender?: (dimensions: { width: number; height: number }) => void;
+  searchResults?: SearchResult[];
+  currentMatchIndex?: number;
 }
 
 function PageCanvas({
@@ -81,10 +88,14 @@ function PageCanvas({
   rotation,
   isVisible,
   onRender,
+  searchResults = [],
+  currentMatchIndex = -1,
 }: PageCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const highlightCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const [isRendering, setIsRendering] = React.useState(false);
   const [dimensions, setDimensions] = React.useState({ width: 0, height: 0 });
+  const [pageHeight, setPageHeight] = React.useState(0);
   const renderTaskRef = React.useRef<{ cancel: () => void } | null>(null);
 
   // Render page when visible or when scale/rotation changes
@@ -133,6 +144,7 @@ function PageCanvas({
           height: viewport.height,
         };
         setDimensions(newDimensions);
+        setPageHeight(page.getViewport({ scale: 1 }).height);
         onRender?.(newDimensions);
       } catch (error) {
         // Ignore cancellation errors
@@ -153,6 +165,50 @@ function PageCanvas({
     };
   }, [pdfDocument, pageNumber, scale, rotation, isVisible, onRender]);
 
+  // Draw search highlights on overlay canvas
+  React.useEffect(() => {
+    const canvas = highlightCanvasRef.current;
+    if (!canvas || dimensions.width === 0 || !pageHeight) return;
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const pixelRatio = window.devicePixelRatio || 1;
+
+    // Set canvas size
+    canvas.width = Math.floor(dimensions.width * pixelRatio);
+    canvas.height = Math.floor(dimensions.height * pixelRatio);
+    canvas.style.width = `${dimensions.width}px`;
+    canvas.style.height = `${dimensions.height}px`;
+
+    context.scale(pixelRatio, pixelRatio);
+    context.clearRect(0, 0, dimensions.width, dimensions.height);
+
+    // Draw each search result highlight
+    searchResults.forEach((result) => {
+      const isCurrentMatch = result.index === currentMatchIndex;
+
+      // Transform PDF coordinates (origin at bottom-left) to canvas (origin at top-left)
+      const x = result.rect.x * scale;
+      const y = (pageHeight - result.rect.y - result.rect.height) * scale;
+      const width = result.rect.width * scale;
+      const height = result.rect.height * scale;
+
+      // Draw highlight rectangle
+      context.fillStyle = isCurrentMatch
+        ? 'rgba(255, 150, 0, 0.4)'  // Orange for current match
+        : 'rgba(255, 255, 0, 0.35)'; // Yellow for other matches
+      context.fillRect(x - 2, y - 2, width + 4, height + 4);
+
+      // Draw border for current match
+      if (isCurrentMatch) {
+        context.strokeStyle = 'rgba(255, 100, 0, 0.8)';
+        context.lineWidth = 2;
+        context.strokeRect(x - 2, y - 2, width + 4, height + 4);
+      }
+    });
+  }, [searchResults, currentMatchIndex, dimensions, pageHeight, scale]);
+
   return (
     <div
       className="relative bg-white shadow-lg"
@@ -169,6 +225,15 @@ function PageCanvas({
           'block',
           isRendering && 'opacity-50'
         )}
+      />
+      {/* Search highlight overlay canvas */}
+      <canvas
+        ref={highlightCanvasRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          width: dimensions.width || 'auto',
+          height: dimensions.height || 'auto',
+        }}
       />
       {isRendering && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -208,6 +273,7 @@ export function PdfViewer({
   showToolbar = true,
   showThumbnails = true,
   enableReorder = false,
+  enableSearch = true,
   onLoad,
   onError,
   onPageChange,
@@ -231,6 +297,9 @@ export function PdfViewer({
     onProgress: (p) => console.log(`Loading: ${p}%`),
   });
 
+  // Search panel visibility state
+  const [showSearchPanel, setShowSearchPanel] = React.useState(false);
+
   // State
   const [currentPage, setCurrentPage] = React.useState(initialPage);
   const [zoom, setZoom] = React.useState(initialZoom);
@@ -246,6 +315,21 @@ export function PdfViewer({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const pageRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
   const pdfDataRef = React.useRef<ArrayBuffer | null>(null);
+
+  // Ref for page change callback (used by search hook)
+  const handlePageChangeRef = React.useRef<(page: number) => void>(() => {});
+
+  // Text search hook
+  const search = useTextSearch({
+    pdfDocument,
+    debounceMs: 300,
+    onMatchChange: React.useCallback((match: SearchResult | null) => {
+      if (match) {
+        // Navigate to the page containing the match
+        handlePageChangeRef.current(match.page);
+      }
+    }, []),
+  });
 
   // Load PDF from source
   React.useEffect(() => {
@@ -338,6 +422,17 @@ export function PdfViewer({
     },
     [pdfDocument, onPageChange]
   );
+
+  // Update page change ref for search hook
+  React.useEffect(() => {
+    handlePageChangeRef.current = handlePageChange;
+  }, [handlePageChange]);
+
+  // Handle search panel close
+  const handleCloseSearch = React.useCallback(() => {
+    setShowSearchPanel(false);
+    search.clearSearch();
+  }, [search]);
 
   // Handle zoom change
   const handleZoomChange = React.useCallback(
@@ -483,6 +578,13 @@ export function PdfViewer({
         e.preventDefault();
         handleDownload();
       }
+      // Search (with Ctrl/Cmd)
+      else if (KEYBOARD_SHORTCUTS.search.includes(key) && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (enableSearch) {
+          setShowSearchPanel(true);
+        }
+      }
       // Tool shortcuts
       else if (KEYBOARD_SHORTCUTS.selectTool.includes(key) && !e.ctrlKey && !e.metaKey) {
         setActiveTool('select');
@@ -501,6 +603,7 @@ export function PdfViewer({
     currentPage,
     zoom,
     isFullscreen,
+    enableSearch,
     handlePageChange,
     handleZoomChange,
     handleToggleFullscreen,
@@ -596,6 +699,31 @@ export function PdfViewer({
         />
       )}
 
+      {/* Search Panel */}
+      {enableSearch && showSearchPanel && (
+        <SearchPanel
+          query={search.query}
+          onQueryChange={search.setQuery}
+          options={search.options}
+          onOptionsChange={search.setOptions}
+          results={search.results}
+          searchState={search.searchState}
+          error={search.error}
+          currentMatchIndex={search.currentMatchIndex}
+          matchCount={search.matchCount}
+          onNextMatch={search.nextMatch}
+          onPrevMatch={search.prevMatch}
+          onGoToMatch={search.goToMatch}
+          onClear={search.clearSearch}
+          onClose={handleCloseSearch}
+          replaceText={search.replaceText}
+          onReplaceTextChange={search.setReplaceText}
+          onReplaceCurrent={search.replaceCurrent}
+          onReplaceAll={search.replaceAll}
+          isReplacing={search.isReplacing}
+        />
+      )}
+
       {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
         {/* Thumbnail Sidebar */}
@@ -638,6 +766,8 @@ export function PdfViewer({
                     scale={zoom}
                     rotation={rotation}
                     isVisible={visiblePages.has(pageNumber)}
+                    searchResults={search.matchesOnPage(pageNumber)}
+                    currentMatchIndex={search.currentMatchIndex}
                   />
                 </div>
               )
