@@ -35,7 +35,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { FileDropzone } from '@/components/file-manager/FileDropzone'
+import { AddToBatchButton } from '@/components/batch/AddToBatchButton'
 import { useToast } from '@/hooks/use-toast'
+import { useOperationHistory } from '@/hooks/useOperationHistory'
 import {
   cn,
   formatFileSize,
@@ -155,6 +157,7 @@ export function MergePanel({ className }: MergePanelProps) {
   const [progress, setProgress] = React.useState(0)
   const [progressStage, setProgressStage] = React.useState<string>('')
   const { toast } = useToast()
+  const { recordOperation } = useOperationHistory({ showToasts: false })
 
   // DnD Kit sensors
   const sensors = useSensors(
@@ -256,6 +259,16 @@ export function MergePanel({ className }: MergePanelProps) {
         toast({
           title: 'Merge complete',
           description: `Successfully merged ${files.length} PDFs (${formatFileSize(result.processedSize ?? 0)})`,
+        })
+
+        // Record to operation history
+        recordOperation({
+          type: 'merge',
+          description: `Merged ${files.length} PDFs into one document`,
+          after: blob,
+          canUndo: false, // Merge creates new file, original files are unchanged
+          fileNames: files.map((item) => item.file.name),
+          fileSize: result.processedSize ?? blob.size,
         })
 
         // Clear the queue after successful merge
@@ -384,17 +397,26 @@ export function MergePanel({ className }: MergePanelProps) {
           </Button>
 
           {files.length > 0 && !isProcessing && (
-            <FileDropzone
-              onFilesAccepted={handleFilesAccepted}
-              multiple
-              maxFiles={100}
-              className="flex-shrink-0"
-            >
-              <Button variant="outline" type="button" className="w-full sm:w-auto">
-                <Plus className="h-4 w-4 mr-2" />
-                Add more files
-              </Button>
-            </FileDropzone>
+            <>
+              <AddToBatchButton
+                operationType="merge"
+                files={files.map((item) => item.file)}
+                options={{ outputFilename: 'merged.pdf' }}
+                disabled={files.length < 2 || isProcessing}
+                onAdded={handleClearAll}
+              />
+              <FileDropzone
+                onFilesAccepted={handleFilesAccepted}
+                multiple
+                maxFiles={100}
+                className="flex-shrink-0"
+              >
+                <Button variant="outline" type="button" className="w-full sm:w-auto">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add more files
+                </Button>
+              </FileDropzone>
+            </>
           )}
         </div>
       </CardContent>

@@ -21,6 +21,7 @@ import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileDropzone } from '@/components/file-manager/FileDropzone'
+import { AddToBatchButton } from '@/components/batch/AddToBatchButton'
 import { useToast } from '@/hooks/use-toast'
 import {
   cn,
@@ -493,24 +494,43 @@ export function WatermarkPanel({ className }: WatermarkPanelProps) {
               </div>
             </label>
 
-            {/* Apply Text Watermark Button */}
-            <Button
-              onClick={handleApplyTextWatermark}
-              disabled={!file || !text.trim() || isProcessing}
-              className="w-full"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Applying...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Apply Watermark
-                </>
+            {/* Apply Text Watermark Buttons */}
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button
+                onClick={handleApplyTextWatermark}
+                disabled={!file || !text.trim() || isProcessing}
+                className="flex-1"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Apply Watermark
+                  </>
+                )}
+              </Button>
+
+              {file && (
+                <AddToBatchButton
+                  operationType="watermark"
+                  files={[file]}
+                  options={{
+                    text,
+                    position,
+                    opacity: opacity / 100,
+                    fontSize,
+                    color,
+                    rotation: position === 'diagonal' ? rotation : 0,
+                  }}
+                  disabled={!file || !text.trim() || isProcessing}
+                  onAdded={() => setFile(null)}
+                />
               )}
-            </Button>
+            </div>
           </TabsContent>
 
           {/* Image Watermark Tab */}

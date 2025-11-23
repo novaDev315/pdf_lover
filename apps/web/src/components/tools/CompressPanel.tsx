@@ -25,7 +25,9 @@ import {
 import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import { FileDropzone } from '@/components/file-manager/FileDropzone'
+import { AddToBatchButton } from '@/components/batch/AddToBatchButton'
 import { useToast } from '@/hooks/use-toast'
+import { useOperationHistory } from '@/hooks/useOperationHistory'
 import {
   cn,
   formatFileSize,
@@ -96,6 +98,7 @@ export function CompressPanel({ className }: CompressPanelProps) {
   const [compressedSize, setCompressedSize] = React.useState<number | null>(null)
   const [compressionResult, setCompressionResult] = React.useState<ArrayBuffer | null>(null)
   const { toast } = useToast()
+  const { recordOperation } = useOperationHistory({ showToasts: false })
 
   const currentConfig = COMPRESSION_LEVELS[compressionLevel] ?? COMPRESSION_LEVELS[1]!
 
@@ -172,10 +175,29 @@ export function CompressPanel({ className }: CompressPanelProps) {
             title: 'Compression complete',
             description: `Reduced file size by ${formatFileSize(savings)} (${savingsPercent}%)`,
           })
+
+          // Record to operation history
+          recordOperation({
+            type: 'compress',
+            description: `Compressed ${file.name} (${savingsPercent}% smaller)`,
+            canUndo: false,
+            fileNames: [file.name],
+            fileSize: result.processedSize ?? result.data.byteLength,
+            metadata: { originalSize: file.size, savings, savingsPercent },
+          })
         } else {
           toast({
             title: 'Compression complete',
             description: 'File is already optimized. No significant size reduction achieved.',
+          })
+
+          // Still record to history
+          recordOperation({
+            type: 'compress',
+            description: `Attempted compression of ${file.name} (already optimized)`,
+            canUndo: false,
+            fileNames: [file.name],
+            fileSize: result.processedSize ?? result.data.byteLength,
           })
         }
       } else {
@@ -394,6 +416,14 @@ export function CompressPanel({ className }: CompressPanelProps) {
                 )}
               </Button>
             )}
+
+            <AddToBatchButton
+              operationType="compress"
+              files={[file]}
+              options={{ level: currentConfig.level }}
+              disabled={isProcessing}
+              onAdded={handleClearFile}
+            />
 
             {compressionResult && (
               <Button

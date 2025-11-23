@@ -32,6 +32,7 @@ import { Progress } from '@/components/ui/progress'
 import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileDropzone } from '@/components/file-manager/FileDropzone'
+import { AddToBatchButton } from '@/components/batch/AddToBatchButton'
 import { useToast } from '@/hooks/use-toast'
 import { useOCR } from '@/hooks/useOCR'
 import { usePdfDocument } from '@/hooks/usePdfDocument'
@@ -837,32 +838,44 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
           </div>
         )}
 
-        {/* Action Button */}
-        <Button
-          onClick={handleConvert}
-          disabled={!canConvert || isProcessing || ocrState === 'processing' || ocrState === 'initializing'}
-          className="w-full"
-        >
-          {isProcessing || ocrState === 'processing' || ocrState === 'initializing' ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              {useOCRForText && mode === 'pdf-to-text' ? 'Running OCR...' : 'Converting...'}
-            </>
-          ) : (
-            <>
-              {mode === 'pdf-to-text' && useOCRForText ? (
-                <ScanLine className="h-4 w-4 mr-2" />
-              ) : mode === 'image-to-pdf' && imageFiles.length > 1 ? (
-                <Package className="h-4 w-4 mr-2" />
-              ) : (
-                <Download className="h-4 w-4 mr-2" />
-              )}
-              {mode === 'pdf-to-text' && useOCRForText
-                ? 'Extract with OCR'
-                : 'Convert & Download'}
-            </>
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <Button
+            onClick={handleConvert}
+            disabled={!canConvert || isProcessing || ocrState === 'processing' || ocrState === 'initializing'}
+            className="flex-1"
+          >
+            {isProcessing || ocrState === 'processing' || ocrState === 'initializing' ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {useOCRForText && mode === 'pdf-to-text' ? 'Running OCR...' : 'Converting...'}
+              </>
+            ) : (
+              <>
+                {mode === 'pdf-to-text' && useOCRForText ? (
+                  <ScanLine className="h-4 w-4 mr-2" />
+                ) : mode === 'image-to-pdf' && imageFiles.length > 1 ? (
+                  <Package className="h-4 w-4 mr-2" />
+                ) : (
+                  <Download className="h-4 w-4 mr-2" />
+                )}
+                {mode === 'pdf-to-text' && useOCRForText
+                  ? 'Extract with OCR'
+                  : 'Convert & Download'}
+              </>
+            )}
+          </Button>
+
+          {file && mode === 'pdf-to-image' && (
+            <AddToBatchButton
+              operationType="convert"
+              files={[file]}
+              options={{ format: outputFormat, quality: 90 }}
+              disabled={isProcessing}
+              onAdded={handleClearFile}
+            />
           )}
-        </Button>
+        </div>
       </CardContent>
     </Card>
   )

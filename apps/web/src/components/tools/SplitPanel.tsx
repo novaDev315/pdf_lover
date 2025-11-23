@@ -27,7 +27,9 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { FileDropzone } from '@/components/file-manager/FileDropzone'
+import { AddToBatchButton } from '@/components/batch/AddToBatchButton'
 import { useToast } from '@/hooks/use-toast'
+import { useOperationHistory } from '@/hooks/useOperationHistory'
 import {
   cn,
   formatFileSize,
@@ -103,6 +105,7 @@ export function SplitPanel({ className }: SplitPanelProps) {
   const [progress, setProgress] = React.useState(0)
   const [progressStage, setProgressStage] = React.useState('')
   const { toast } = useToast()
+  const { recordOperation } = useOperationHistory({ showToasts: false })
 
   /**
    * Handle file upload
@@ -239,6 +242,15 @@ export function SplitPanel({ className }: SplitPanelProps) {
             title: 'Split complete',
             description: `Extracted ${fileData.pageCount} pages`,
           })
+
+          // Record to operation history
+          recordOperation({
+            type: 'split',
+            description: `Extracted ${fileData.pageCount} pages from ${file.name}`,
+            canUndo: false,
+            fileNames: [file.name],
+            fileSize: fileData.data.byteLength,
+          })
         } else {
           // Multiple files - create ZIP
           const zip = new JSZip()
@@ -252,6 +264,15 @@ export function SplitPanel({ className }: SplitPanelProps) {
           toast({
             title: 'Split complete',
             description: `Created ${result.files.length} PDF files`,
+          })
+
+          // Record to operation history
+          recordOperation({
+            type: 'split',
+            description: `Split ${file.name} into ${result.files.length} files`,
+            canUndo: false,
+            fileNames: [file.name],
+            fileSize: result.files.reduce((sum, f) => sum + f.data.byteLength, 0),
           })
         }
       } else {
@@ -447,29 +468,42 @@ export function SplitPanel({ className }: SplitPanelProps) {
           </div>
         )}
 
-        {/* Action Button */}
+        {/* Action Buttons */}
         {file && (
-          <Button
-            onClick={handleSplit}
-            disabled={!isValidInput || isProcessing}
-            className="w-full"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Splitting...
-              </>
-            ) : (
-              <>
-                {splitMode === 'pages' && selectedPages.length === 1 ? (
-                  <Download className="h-4 w-4 mr-2" />
-                ) : (
-                  <Package className="h-4 w-4 mr-2" />
-                )}
-                Split & Download
-              </>
-            )}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={handleSplit}
+              disabled={!isValidInput || isProcessing}
+              className="flex-1"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Splitting...
+                </>
+              ) : (
+                <>
+                  {splitMode === 'pages' && selectedPages.length === 1 ? (
+                    <Download className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Package className="h-4 w-4 mr-2" />
+                  )}
+                  Split & Download
+                </>
+              )}
+            </Button>
+
+            <AddToBatchButton
+              operationType="split"
+              files={[file]}
+              options={{
+                mode: splitMode === 'pages' ? 'all' : splitMode === 'range' ? 'range' : 'all',
+                ranges: splitMode === 'range' ? pageRangeInput : undefined,
+              }}
+              disabled={!isValidInput || isProcessing}
+              onAdded={handleClearFile}
+            />
+          </div>
         )}
       </CardContent>
     </Card>
