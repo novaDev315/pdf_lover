@@ -14,6 +14,38 @@ import type { AIProvider } from '@pdflover/shared';
 export type Theme = 'light' | 'dark' | 'system';
 
 /**
+ * Font size options
+ */
+export type FontSize = 'small' | 'medium' | 'large';
+
+/**
+ * Accent color options
+ */
+export type AccentColor = 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'red';
+
+/**
+ * Default viewer tool
+ */
+export type ViewerTool = 'hand' | 'select';
+
+/**
+ * Page display mode
+ */
+export type PageDisplayMode = 'single' | 'continuous';
+
+/**
+ * Appearance settings
+ */
+export interface AppearanceSettings {
+  /** Accent color */
+  accentColor: AccentColor;
+  /** Font size */
+  fontSize: FontSize;
+  /** Sidebar default state */
+  sidebarOpen: boolean;
+}
+
+/**
  * PDF viewer settings
  */
 export interface ViewerSettings {
@@ -33,6 +65,10 @@ export interface ViewerSettings {
   enableTextSelection: boolean;
   /** Enable annotations */
   enableAnnotations: boolean;
+  /** Page display mode */
+  pageDisplay: PageDisplayMode;
+  /** Default tool */
+  defaultTool: ViewerTool;
 }
 
 /**
@@ -59,6 +95,8 @@ export interface AISettings {
   ragChunkOverlap: number;
   /** RAG top K results */
   ragTopK: number;
+  /** Auto-index documents for AI search */
+  autoIndexDocuments: boolean;
 }
 
 /**
@@ -77,6 +115,8 @@ export interface ProcessingSettings {
   autoExtractText: boolean;
   /** OCR language */
   ocrLanguage: string;
+  /** Auto-cleanup temp files */
+  autoCleanupTempFiles: boolean;
 }
 
 /**
@@ -101,6 +141,8 @@ export interface SettingsState {
   theme: Theme;
   /** Language code (ISO 639-1) */
   language: string;
+  /** Appearance settings */
+  appearance: AppearanceSettings;
   /** Viewer settings */
   viewer: ViewerSettings;
   /** AI settings */
@@ -127,6 +169,8 @@ export interface SettingsActions {
   setAIProvider: (provider: AIProvider) => void;
   /** Set OpenRouter API key */
   setApiKey: (apiKey: string | null) => void;
+  /** Update appearance settings */
+  updateAppearanceSettings: (settings: Partial<AppearanceSettings>) => void;
   /** Update viewer settings */
   updateViewerSettings: (settings: Partial<ViewerSettings>) => void;
   /** Update AI settings */
@@ -151,6 +195,15 @@ export interface SettingsActions {
 export type SettingsStore = SettingsState & SettingsActions;
 
 /**
+ * Default appearance settings
+ */
+const defaultAppearanceSettings: AppearanceSettings = {
+  accentColor: 'blue',
+  fontSize: 'medium',
+  sidebarOpen: true,
+};
+
+/**
  * Default viewer settings
  */
 const defaultViewerSettings: ViewerSettings = {
@@ -162,6 +215,8 @@ const defaultViewerSettings: ViewerSettings = {
   spreadMode: 'none',
   enableTextSelection: true,
   enableAnnotations: true,
+  pageDisplay: 'continuous',
+  defaultTool: 'hand',
 };
 
 /**
@@ -178,6 +233,7 @@ const defaultAISettings: AISettings = {
   ragChunkSize: 512,
   ragChunkOverlap: 50,
   ragTopK: 5,
+  autoIndexDocuments: true,
 };
 
 /**
@@ -190,6 +246,7 @@ const defaultProcessingSettings: ProcessingSettings = {
   autoGenerateThumbnails: true,
   autoExtractText: true,
   ocrLanguage: 'eng',
+  autoCleanupTempFiles: true,
 };
 
 /**
@@ -208,6 +265,7 @@ const defaultPrivacySettings: PrivacySettings = {
 const initialState: SettingsState = {
   theme: 'system',
   language: 'en',
+  appearance: defaultAppearanceSettings,
   viewer: defaultViewerSettings,
   ai: defaultAISettings,
   processing: defaultProcessingSettings,
@@ -251,6 +309,12 @@ export const useSettingsStore = create<SettingsStore>()(
       setApiKey: (apiKey: string | null) => {
         set((state) => {
           state.ai.openRouterApiKey = apiKey;
+        });
+      },
+
+      updateAppearanceSettings: (settings: Partial<AppearanceSettings>) => {
+        set((state) => {
+          state.appearance = { ...state.appearance, ...settings };
         });
       },
 
@@ -324,6 +388,7 @@ export const useSettingsStore = create<SettingsStore>()(
         // Only persist these fields
         theme: state.theme,
         language: state.language,
+        appearance: state.appearance,
         viewer: state.viewer,
         ai: state.ai,
         processing: state.processing,
