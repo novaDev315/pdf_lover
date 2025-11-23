@@ -10,6 +10,8 @@ import {
   SecurityPage,
   WatermarkPage,
   SignaturePage,
+  ChatPage,
+  EditorPage,
 } from '@/pages';
 import {
   InstallPrompt,
@@ -57,7 +59,8 @@ function App() {
         <Route path="/security" element={<SecurityPage />} />
         <Route path="/watermark" element={<WatermarkPage />} />
         <Route path="/signature" element={<SignaturePage />} />
-        <Route path="/chat" element={<PlaceholderPage title="AI Chat" />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/editor" element={<EditorPage />} />
         <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
       </Routes>
     </BrowserRouter>
