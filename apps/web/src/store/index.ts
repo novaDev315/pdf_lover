@@ -133,3 +133,57 @@ export type {
   HistoryEntry,
   ToolOptions,
 } from './annotation-store';
+
+// Batch Store
+export {
+  useBatchStore,
+  selectPendingOperations,
+  selectCompletedOperations,
+  selectFailedOperations,
+  selectCurrentOperation,
+  selectQueueStats,
+  selectHasQueueItems,
+  selectIsQueueProcessing,
+  getOperationTypeLabel,
+  getOperationStatusLabel,
+} from './batch-store';
+export type {
+  BatchState,
+  BatchActions,
+  BatchStore,
+  BatchOperationType,
+  BatchOperationStatus,
+  BatchOperation,
+  BatchOperationResult,
+  BatchFileInfo,
+  QueueStatus,
+  MergeOptions,
+  CompressOptions,
+  ConvertOptions,
+  WatermarkOptions,
+  SplitOptions,
+  OCROptions,
+  SecurityOptions,
+  BatchOperationOptions,
+} from './batch-store';
+
+// History Store
+export {
+  useHistoryStore,
+  selectCanUndo,
+  selectCanRedo,
+  selectCurrentEntry,
+  selectHistoryCount,
+  selectUndoAvailable,
+  selectRedoAvailable,
+  selectOperationsByType,
+  selectOperationsForDocument,
+  getOperationTypeLabel as getHistoryOperationTypeLabel,
+} from './history-store';
+export type {
+  HistoryState,
+  HistoryActions,
+  HistoryStore,
+  HistoryEntry as HistoryStoreEntry,
+  OperationType,
+} from './history-store';

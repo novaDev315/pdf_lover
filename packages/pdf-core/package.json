@@ -26,6 +26,18 @@
     "./convert": {
       "types": "./dist/convert.d.ts",
       "import": "./dist/convert.js"
+    },
+    "./extract-images": {
+      "types": "./dist/extract-images.d.ts",
+      "import": "./dist/extract-images.js"
+    },
+    "./page-transform": {
+      "types": "./dist/page-transform.d.ts",
+      "import": "./dist/page-transform.js"
+    },
+    "./toc": {
+      "types": "./dist/toc.d.ts",
+      "import": "./dist/toc.js"
     }
   },
   "files": [

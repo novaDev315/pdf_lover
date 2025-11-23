@@ -69,3 +69,35 @@ export {
   type IndexingProgress,
   type PDFDocument,
 } from './rag'
+
+// Document Classification
+export {
+  classifyDocumentEnhanced,
+  classifyWithPatterns,
+  classifyWithML,
+  quickClassify,
+  batchClassifyEnhanced,
+  generateClassificationSummary,
+  initializeMLClassifier,
+  isMLClassificationAvailable,
+  getMLModelState,
+  unloadMLClassifier,
+  getDocumentTypes,
+  getDocumentTypeLabel,
+  getDocumentTypeDescription,
+  detectKeywords,
+  extractDocumentFeatures,
+} from './classifier'
+export type {
+  EnhancedClassification,
+  MLClassificationResult,
+  CombinedClassifyOptions,
+  ClassificationSummary,
+  DocumentType,
+  DocumentFeatures,
+  KeywordMatch,
+  DocumentMetadata,
+  ConfidenceLevel,
+  Classification,
+  ModelLoadProgressCallback,
+} from './classifier'

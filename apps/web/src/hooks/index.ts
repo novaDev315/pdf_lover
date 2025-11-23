@@ -66,3 +66,70 @@ export {
   type PWAActions,
   type UsePWAReturn,
 } from './usePWA';
+
+// Text search hooks
+export {
+  useTextSearch,
+  type SearchResult,
+  type SearchOptions,
+  type SearchState,
+  type UseTextSearchReturn,
+  type UseTextSearchOptions,
+} from './useTextSearch';
+
+// Batch processing hooks
+export {
+  useBatchProcessor,
+  useBatchProcessorState,
+  type BatchProcessorState,
+  type UseBatchProcessorOptions,
+  type UseBatchProcessorReturn,
+} from './useBatchProcessor';
+
+// Image extraction hooks
+export {
+  useImageExtraction,
+  type ExtractionState,
+  type ExtractionProgress,
+  type UseImageExtractionOptions,
+  type UseImageExtractionReturn,
+} from './useImageExtraction';
+
+// Table extraction hooks
+export {
+  useTableExtraction,
+  type TableExtractionState,
+  type TableExtractionProgress,
+  type CellEdit,
+  type UseTableExtractionOptions,
+  type UseTableExtractionReturn,
+} from './useTableExtraction';
+
+// PDF comparison hooks
+export {
+  usePdfComparison,
+  type ComparisonState,
+  type ComparisonMode,
+  type ComparisonProgress,
+  type UsePdfComparisonOptions,
+  type UsePdfComparisonReturn,
+  type ComparisonResult,
+  type ComparisonSummary,
+  type PageComparison,
+  type Difference,
+  type DifferenceType,
+  type LineDiff,
+  type TextComparisonResult,
+  type VisualPageDiff,
+} from './usePdfComparison';
+
+// Operation history hooks
+export {
+  useOperationHistory,
+  useHistoryState,
+  type RecordOperationOptions,
+  type UndoResult,
+  type RedoResult,
+  type UseOperationHistoryOptions,
+  type UseOperationHistoryReturn,
+} from './useOperationHistory';
