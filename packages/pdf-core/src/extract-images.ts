@@ -438,7 +438,9 @@ async function extractImagesFromPage(
  */
 async function createImageFromBytes(bytes: Uint8Array, mimeType: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const blob = new Blob([bytes], { type: mimeType });
+    // Ensure we have a regular ArrayBuffer, not SharedArrayBuffer
+    const regularBytes = new Uint8Array(bytes);
+    const blob = new Blob([regularBytes], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
@@ -563,7 +565,7 @@ export async function extractImagesAsBlobs(
   }
 
   return result.images.map((img) => ({
-    blob: new Blob([img.data], { type: getMimeType(img.format) }),
+    blob: new Blob([new Uint8Array(img.data)], { type: getMimeType(img.format) }),
     metadata: {
       page: img.page,
       index: img.index,

@@ -11,15 +11,12 @@ import { PDFDocument } from 'pdf-lib';
 import type {
   PDFDocument as PDFDocumentType,
   ProgressCallback,
-  ProcessingResult,
 } from '@pdflover/shared';
 import {
   loadPDFDocument,
   getPDFBytes,
   validatePDFBuffer,
-  createErrorResult,
   createProgressReporter,
-  measureTime,
 } from './utils.js';
 
 /**
@@ -279,9 +276,9 @@ function levenshteinDistance(str1: string, str2: string): number {
 }
 
 /**
- * Calculate similarity percentage between two strings
+ * Calculate similarity percentage between two strings (reserved for future use)
  */
-function calculateStringSimilarity(str1: string, str2: string): number {
+function _calculateStringSimilarity(str1: string, str2: string): number {
   if (str1 === str2) return 100;
   if (str1.length === 0 && str2.length === 0) return 100;
   if (str1.length === 0 || str2.length === 0) return 0;
@@ -299,7 +296,6 @@ function computeLineDiff(
   lines2: TextLine[]
 ): LineDiff[] {
   const diffs: LineDiff[] = [];
-  const maxLen = Math.max(lines1.length, lines2.length);
 
   // Simple line-by-line comparison
   // In production, use a proper diff algorithm like Myers or patience diff
@@ -448,9 +444,9 @@ export async function compareVisual(
   options: VisualCompareOptions = {}
 ): Promise<VisualPageDiff[]> {
   const {
-    threshold = 0.1,
-    highlightColor = '#ff0000',
-    opacity = 0.5,
+    threshold: _threshold = 0.1,
+    highlightColor: _highlightColor = '#ff0000',
+    opacity: _opacity = 0.5,
     scale = 1.5,
     onProgress,
   } = options;
@@ -550,8 +546,8 @@ export async function comparePDFs(
     compareText: doTextCompare = true,
     compareVisual: doVisualCompare = false,
     visualThreshold = 0.1,
-    additionColor = '#22c55e',
-    deletionColor = '#ef4444',
+    additionColor: _additionColor = '#22c55e',
+    deletionColor: _deletionColor = '#ef4444',
     changeColor = '#eab308',
     scale = 1.5,
     onProgress,

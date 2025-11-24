@@ -19,6 +19,17 @@ import {
 import { loadPDFDocument, measureTime } from './utils.js';
 
 /**
+ * Helper function to safely get a page from an array
+ * Returns non-null page after validation
+ */
+function getPageSafely(pages: PDFPage[], pageNum: number): PDFPage | null {
+  if (pageNum < 1 || pageNum > pages.length) {
+    return null;
+  }
+  return pages[pageNum - 1] ?? null;
+}
+
+/**
  * Rectangle definition for positioning elements
  */
 export interface Rect {
@@ -204,6 +215,9 @@ export async function addTextAnnotation(
       }
 
       const page = pages[options.pageNum - 1];
+      if (!page) {
+        return { success: false, error: `Page ${options.pageNum} not found` };
+      }
       const annotationId = generateAnnotationId();
       const color = options.color ?? { r: 0, g: 0, b: 0 };
       const fontSize = options.fontSize ?? 12;
@@ -282,11 +296,10 @@ export async function addHighlight(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const annotationId = generateAnnotationId();
 
       // Draw highlight rectangle with transparency
@@ -336,11 +349,10 @@ export async function addUnderline(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const annotationId = generateAnnotationId();
       const color = options.color ?? { r: 0, g: 0, b: 0 };
       const opacity = options.opacity ?? 1;
@@ -391,11 +403,10 @@ export async function addStrikethrough(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const annotationId = generateAnnotationId();
       const color = options.color ?? { r: 1, g: 0, b: 0 };
       const opacity = options.opacity ?? 1;
@@ -448,11 +459,10 @@ export async function addFreehandDrawing(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const annotationId = generateAnnotationId();
       const color = options.color ?? { r: 0, g: 0, b: 0 };
       const strokeWidth = options.strokeWidth ?? 2;
@@ -516,11 +526,10 @@ export async function addShape(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const annotationId = generateAnnotationId();
       const strokeColor = options.strokeColor ?? { r: 0, g: 0, b: 0 };
       const fillColor = options.fillColor ?? { r: 1, g: 1, b: 1 };
@@ -672,11 +681,10 @@ export async function addImage(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const annotationId = generateAnnotationId();
 
       // Convert image data to Uint8Array if needed
@@ -775,11 +783,10 @@ export async function addTextField(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const form = pdfDoc.getForm();
       const annotationId = generateAnnotationId();
       const fieldName = options.name ?? `textfield_${annotationId}`;
@@ -857,11 +864,10 @@ export async function addCheckbox(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
       const form = pdfDoc.getForm();
       const annotationId = generateAnnotationId();
       const fieldName = options.name ?? `checkbox_${annotationId}`;
@@ -923,11 +929,10 @@ export async function removeAnnotation(
       const pdfDoc = await loadPDFDocument(pdfData);
       const pages = pdfDoc.getPages();
 
-      if (pageNum < 1 || pageNum > pages.length) {
+      const page = getPageSafely(pages, pageNum);
+      if (!page) {
         return { success: false, error: `Invalid page number: ${pageNum}` };
       }
-
-      const page = pages[pageNum - 1];
 
       // Cover the area with white rectangle
       // Note: This is a visual removal, not true annotation removal

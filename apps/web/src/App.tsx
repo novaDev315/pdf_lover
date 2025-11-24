@@ -32,6 +32,7 @@ import {
   OfflineIndicator,
 } from '@/components/pwa';
 import { useOperationHistory } from '@/hooks/useOperationHistory';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 /**
  * Global keyboard shortcut handler for undo/redo
@@ -88,42 +89,44 @@ function GlobalKeyboardHandler({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <BrowserRouter>
-      {/* PWA Components */}
-      <OfflineIndicator variant="toast" position="bottom" showOnlineNotification />
-      <UpdateNotification position="bottom" />
-      <InstallPrompt variant="banner" showDelay={5000} />
+    <ErrorBoundary>
+      <BrowserRouter>
+        {/* PWA Components */}
+        <OfflineIndicator variant="toast" position="bottom" showOnlineNotification />
+        <UpdateNotification position="bottom" />
+        <InstallPrompt variant="banner" showDelay={5000} />
 
-      {/* Global Keyboard Handler for Undo/Redo */}
-      <GlobalKeyboardHandler>
-        {/* Routes */}
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/merge" element={<MergePage />} />
-          <Route path="/split" element={<SplitPage />} />
-          <Route path="/compress" element={<CompressPage />} />
-          <Route path="/convert" element={<ConvertPage />} />
-          <Route path="/security" element={<SecurityPage />} />
-          <Route path="/watermark" element={<WatermarkPage />} />
-          <Route path="/signature" element={<SignaturePage />} />
-          <Route path="/chat" element={<ChatPage />} />
-          <Route path="/editor" element={<EditorPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/search" element={<SearchReplacePage />} />
-          <Route path="/batch" element={<BatchPage />} />
-          <Route path="/extract-images" element={<ExtractImagesPage />} />
-          <Route path="/extract-tables" element={<ExtractTablesPage />} />
-          <Route path="/page-numbers" element={<PageNumbersPage />} />
-          <Route path="/crop-resize" element={<CropResizePage />} />
-          <Route path="/compare" element={<ComparePage />} />
-          <Route path="/toc" element={<TOCPage />} />
-          <Route path="/form-detection" element={<FormDetectionPage />} />
-          <Route path="/classify" element={<ClassifyPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/key-info" element={<KeyInfoPage />} />
-        </Routes>
-      </GlobalKeyboardHandler>
-    </BrowserRouter>
+        {/* Global Keyboard Handler for Undo/Redo */}
+        <GlobalKeyboardHandler>
+          {/* Routes */}
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/merge" element={<MergePage />} />
+            <Route path="/split" element={<SplitPage />} />
+            <Route path="/compress" element={<CompressPage />} />
+            <Route path="/convert" element={<ConvertPage />} />
+            <Route path="/security" element={<SecurityPage />} />
+            <Route path="/watermark" element={<WatermarkPage />} />
+            <Route path="/signature" element={<SignaturePage />} />
+            <Route path="/chat" element={<ChatPage />} />
+            <Route path="/editor" element={<EditorPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/search" element={<SearchReplacePage />} />
+            <Route path="/batch" element={<BatchPage />} />
+            <Route path="/extract-images" element={<ExtractImagesPage />} />
+            <Route path="/extract-tables" element={<ExtractTablesPage />} />
+            <Route path="/page-numbers" element={<PageNumbersPage />} />
+            <Route path="/crop-resize" element={<CropResizePage />} />
+            <Route path="/compare" element={<ComparePage />} />
+            <Route path="/toc" element={<TOCPage />} />
+            <Route path="/form-detection" element={<FormDetectionPage />} />
+            <Route path="/classify" element={<ClassifyPage />} />
+            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/key-info" element={<KeyInfoPage />} />
+          </Routes>
+        </GlobalKeyboardHandler>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

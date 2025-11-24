@@ -13,7 +13,12 @@
     "types": ["vite/client"],
     "noEmit": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "strict": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

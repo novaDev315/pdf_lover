@@ -341,7 +341,7 @@ describe('unique', () => {
     ];
     const result = unique(arr, (item) => item.id);
     expect(result).toHaveLength(2);
-    expect(result[0].name).toBe('a');
+    expect(result[0]?.name).toBe('a');
   });
 });
 

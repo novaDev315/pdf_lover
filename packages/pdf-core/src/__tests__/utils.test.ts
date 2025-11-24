@@ -101,7 +101,7 @@ describe('validatePDFBuffer', () => {
 
   it('should work with ArrayBuffer input', () => {
     const validPdf = createValidPdfBuffer();
-    const arrayBuffer = validPdf.buffer.slice(0, validPdf.byteLength);
+    const arrayBuffer = validPdf.buffer.slice(0, validPdf.byteLength) as ArrayBuffer;
     const result = validatePDFBuffer(arrayBuffer);
     expect(result.valid).toBe(true);
   });

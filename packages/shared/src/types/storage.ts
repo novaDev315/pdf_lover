@@ -3,8 +3,7 @@
  * Uses IndexedDB via Dexie.js for local-first storage
  */
 
-import type { PDFDocument, PDFMetadata } from './pdf.js';
-import type { Conversation } from './chat.js';
+import type { PDFMetadata } from './pdf.js';
 
 /**
  * Storage provider types

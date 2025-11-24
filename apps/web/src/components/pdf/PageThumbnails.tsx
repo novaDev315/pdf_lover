@@ -160,7 +160,7 @@ function ThumbnailItem({
  * />
  * ```
  */
-export function PageThumbnails({
+export const PageThumbnails = React.memo(function PageThumbnails({
   pdfDocument,
   currentPage,
   thumbnailWidth = 96,
@@ -415,7 +415,7 @@ export function PageThumbnails({
       </div>
     </div>
   );
-}
+});
 
 PageThumbnails.displayName = 'PageThumbnails';
 

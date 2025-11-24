@@ -134,8 +134,9 @@ describe('splitPDF', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.files![0].filename).toBe('doc_page1.pdf');
-      expect(result.files![1].filename).toBe('doc_page2.pdf');
+      expect(result.files).toBeDefined();
+      expect(result.files?.[0]?.filename).toBe('doc_page1.pdf');
+      expect(result.files?.[1]?.filename).toBe('doc_page2.pdf');
     });
   });
 
@@ -166,7 +167,8 @@ describe('splitPDF', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.files![0].filename).toBe('section_pages1-3.pdf');
+      expect(result.files).toBeDefined();
+      expect(result.files?.[0]?.filename).toBe('section_pages1-3.pdf');
     });
   });
 
@@ -247,7 +249,8 @@ describe('extractPages', () => {
 
     expect(result.success).toBe(true);
     expect(result.data).toBeDefined();
-    expect(result.files![0].pageCount).toBe(3);
+    expect(result.files).toBeDefined();
+    expect(result.files?.[0]?.pageCount).toBe(3);
   });
 
   it('should remove duplicate pages', async () => {
@@ -255,7 +258,8 @@ describe('extractPages', () => {
     const result = await extractPages(pdfBuffer, [1, 1, 2, 2, 3]);
 
     expect(result.success).toBe(true);
-    expect(result.files![0].pageCount).toBe(3);
+    expect(result.files).toBeDefined();
+    expect(result.files?.[0]?.pageCount).toBe(3);
   });
 
   it('should sort pages', async () => {
@@ -279,7 +283,8 @@ describe('extractPages', () => {
     const result = await extractPages(pdfBuffer, [1], 'custom.pdf');
 
     expect(result.success).toBe(true);
-    expect(result.files![0].filename).toBe('custom.pdf');
+    expect(result.files).toBeDefined();
+    expect(result.files?.[0]?.filename).toBe('custom.pdf');
   });
 });
 

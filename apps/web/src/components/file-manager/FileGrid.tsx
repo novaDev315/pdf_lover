@@ -82,7 +82,7 @@ export interface FileGridProps {
  * />
  * ```
  */
-export function FileGrid({
+export const FileGrid = React.memo(function FileGrid({
   files,
   onFileClick,
   onFileDoubleClick,
@@ -256,4 +256,4 @@ export function FileGrid({
       </TooltipProvider>
     </div>
   )
-}
+});

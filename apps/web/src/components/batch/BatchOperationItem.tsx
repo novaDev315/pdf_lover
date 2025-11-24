@@ -154,7 +154,7 @@ export interface BatchOperationItemProps {
 /**
  * Individual batch operation item component
  */
-export function BatchOperationItem({
+export const BatchOperationItem = React.memo(function BatchOperationItem({
   operation,
   onRemove,
   onRetry,
@@ -424,4 +424,4 @@ export function BatchOperationItem({
       </div>
     </div>
   );
-}
+});

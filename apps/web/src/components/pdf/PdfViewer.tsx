@@ -294,7 +294,6 @@ export function PdfViewer({
   } = usePdfDocument({
     onLoad,
     onError,
-    onProgress: (p) => console.log(`Loading: ${p}%`),
   });
 
   // Search panel visibility state

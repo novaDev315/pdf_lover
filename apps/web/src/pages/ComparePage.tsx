@@ -64,9 +64,6 @@ export function ComparePage() {
     reset,
   } = usePdfComparison({
     defaultMode: 'text',
-    onComplete: (result) => {
-      console.log('Comparison complete:', result.summary);
-    },
     onError: (err) => {
       console.error('Comparison error:', err);
     },

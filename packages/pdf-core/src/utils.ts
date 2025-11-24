@@ -26,7 +26,7 @@ export async function loadPDFDocument(
     return PDFDocument.load(input.data, { ignoreEncryption: true });
   }
   // It's raw data (ArrayBuffer or Uint8Array)
-  return PDFDocument.load(input, { ignoreEncryption: true });
+  return PDFDocument.load(input as ArrayBuffer | Uint8Array, { ignoreEncryption: true });
 }
 
 /**

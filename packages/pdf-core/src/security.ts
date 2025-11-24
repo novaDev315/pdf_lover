@@ -515,7 +515,7 @@ async function generateEncryptionKey(
  * @returns Hexadecimal checksum string
  */
 async function computeChecksum(data: Uint8Array): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', new Uint8Array(data));
   const hashArray = new Uint8Array(hashBuffer);
   return Array.from(hashArray)
     .map((b) => b.toString(16).padStart(2, '0'))

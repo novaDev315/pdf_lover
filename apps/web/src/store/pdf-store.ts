@@ -191,11 +191,11 @@ export const usePDFStore = create<PDFStore>()(
 
     reorderPages: (documentId: string, newOrder: number[]) => {
       set((state) => {
-        const docIndex = state.documents.findIndex((doc) => doc.id === documentId);
+        const docIndex = state.documents.findIndex((doc: PDFDocument) => doc.id === documentId);
         if (docIndex !== -1) {
           const doc = state.documents[docIndex];
           // Create a map of page number to page object
-          const pageMap = new Map(doc.pages.map((page) => [page.pageNumber, page]));
+          const pageMap = new Map(doc.pages.map((page: PDFPage) => [page.pageNumber, page]));
           // Reorder pages based on new order
           const reorderedPages: PDFPage[] = newOrder
             .map((pageNum, index) => {

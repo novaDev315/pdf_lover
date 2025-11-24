@@ -241,7 +241,8 @@ export async function initializeOCR(
   languages: OCRLanguageCode[] = ['eng']
 ): Promise<TesseractWorker> {
   // Dynamically import Tesseract.js
-  const Tesseract = await import('tesseract.js');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const Tesseract = await import('tesseract.js' as any);
 
   if (!globalWorker) {
     globalWorker = await Tesseract.createWorker({
@@ -252,7 +253,7 @@ export async function initializeOCR(
   // Load any new languages that haven't been initialized
   const newLanguages = languages.filter((lang) => !initializedLanguages.has(lang));
 
-  if (newLanguages.length > 0) {
+  if (newLanguages.length > 0 && globalWorker) {
     for (const lang of newLanguages) {
       await globalWorker.loadLanguage(lang);
       initializedLanguages.add(lang);
@@ -261,6 +262,10 @@ export async function initializeOCR(
     // Initialize with all loaded languages
     const allLanguages = Array.from(initializedLanguages).join('+');
     await globalWorker.initialize(allLanguages);
+  }
+
+  if (!globalWorker) {
+    throw new Error('Failed to initialize OCR worker');
   }
 
   return globalWorker;

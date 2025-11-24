@@ -292,13 +292,13 @@ export const useUIStore = create<UIStore>()(
 
     removeNotification: (id: string) => {
       set((state) => {
-        state.notifications = state.notifications.filter((n) => n.id !== id);
+        state.notifications = state.notifications.filter((n: Notification) => n.id !== id);
       });
     },
 
     markNotificationRead: (id: string) => {
       set((state) => {
-        const notification = state.notifications.find((n) => n.id === id);
+        const notification = state.notifications.find((n: Notification) => n.id === id);
         if (notification) {
           notification.isRead = true;
         }

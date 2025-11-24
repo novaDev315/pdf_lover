@@ -13,7 +13,7 @@ import type {
   CompressionLevel,
   PDFDocument as PDFDocumentType,
 } from '@pdflover/shared';
-import { COMPRESSION_SETTINGS, ERROR_MESSAGES } from '@pdflover/shared';
+import { ERROR_MESSAGES } from '@pdflover/shared';
 import {
   loadPDFDocument,
   validatePDFBuffer,

@@ -38,7 +38,6 @@ export function SearchReplacePage() {
     loadFromFile,
     loadFromArrayBuffer,
   } = usePdfDocument({
-    onLoad: (meta) => console.log('Loaded PDF:', meta.title || 'Untitled'),
     onError: (err) => console.error('PDF load error:', err),
   });
 
@@ -46,9 +45,6 @@ export function SearchReplacePage() {
   const search = useTextSearch({
     pdfDocument,
     debounceMs: 300,
-    onSearchComplete: (results) => {
-      console.log(`Found ${results.length} matches`);
-    },
     onReplace: async (searchQuery, replaceWith, results, replaceAll) => {
       if (!pdfData) return false;
 

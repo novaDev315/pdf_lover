@@ -410,7 +410,8 @@ export async function isWebGPUSupported(): Promise<boolean> {
     return false;
   }
   try {
-    const adapter = await navigator.gpu.requestAdapter();
+    const gpu = (navigator as any).gpu;
+    const adapter = await gpu.requestAdapter();
     return adapter !== null;
   } catch {
     return false;

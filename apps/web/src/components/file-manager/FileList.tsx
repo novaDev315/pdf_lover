@@ -69,7 +69,7 @@ export interface FileListProps {
  * />
  * ```
  */
-export function FileList({
+export const FileList = React.memo(function FileList({
   files,
   onFileClick,
   onFileDoubleClick,
@@ -301,4 +301,4 @@ export function FileList({
       </table>
     </div>
   )
-}
+});
