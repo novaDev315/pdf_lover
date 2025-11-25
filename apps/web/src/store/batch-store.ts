@@ -17,7 +17,9 @@ export type BatchOperationType =
   | 'watermark'
   | 'split'
   | 'ocr'
-  | 'security';
+  | 'security'
+  | 'trim'
+  | 'resize';
 
 /**
  * Status of a batch operation
@@ -47,7 +49,7 @@ export interface ConvertOptions {
 
 export interface WatermarkOptions {
   text: string;
-  position: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  position: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'top' | 'bottom' | 'diagonal';
   opacity: number;
   fontSize: number;
   color: string;
@@ -73,6 +75,19 @@ export interface SecurityOptions {
   };
 }
 
+export interface TrimOptions {
+  threshold?: number;
+  padding?: number;
+  uniformPadding?: boolean;
+}
+
+export interface ResizeOptions {
+  resizeMode?: 'standard' | 'custom';
+  width?: number;
+  height?: number;
+  maintainAspectRatio?: boolean;
+}
+
 export type BatchOperationOptions =
   | MergeOptions
   | CompressOptions
@@ -80,7 +95,9 @@ export type BatchOperationOptions =
   | WatermarkOptions
   | SplitOptions
   | OCROptions
-  | SecurityOptions;
+  | SecurityOptions
+  | TrimOptions
+  | ResizeOptions;
 
 /**
  * File info stored in batch operation
@@ -516,6 +533,8 @@ export function getOperationTypeLabel(type: BatchOperationType): string {
     split: 'Split',
     ocr: 'OCR',
     security: 'Security',
+    trim: 'Trim Margins',
+    resize: 'Resize',
   };
   return labels[type];
 }

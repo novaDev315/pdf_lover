@@ -68,7 +68,7 @@ function PDFViewer({
       {/* Toolbar */}
       <div className="flex items-center gap-2 border-b bg-background px-4 py-2">
         <span className="text-sm font-medium truncate">
-          {currentDocument.name}
+          {currentDocument.filename}
         </span>
         <span className="text-xs text-muted-foreground">
           ({currentDocument.pageCount} pages)
@@ -218,7 +218,7 @@ export function ChatPage() {
   React.useEffect(() => {
     if (currentDocument && !currentConversation) {
       startConversation({
-        title: `Chat: ${currentDocument.name}`,
+        title: `Chat: ${currentDocument.filename}`,
         documentIds: [currentDocument.id],
         provider: aiSettings.provider,
         modelId:
@@ -234,7 +234,7 @@ export function ChatPage() {
     if (currentDocument && !indexingState.isIndexed && !indexingState.isIndexing) {
       indexDocumentRAG({
         id: currentDocument.id,
-        name: currentDocument.name,
+        name: currentDocument.filename,
         pages: currentDocument.pages.map((page) => ({
           pageNumber: page.pageNumber,
           textContent: page.textContent,
@@ -508,7 +508,7 @@ ${context.contextText}
         onReindex={() => {
           indexDocumentRAG({
             id: currentDocument.id,
-            name: currentDocument.name,
+            name: currentDocument.filename,
             pages: currentDocument.pages.map((page) => ({
               pageNumber: page.pageNumber,
               textContent: page.textContent,

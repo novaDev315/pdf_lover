@@ -99,5 +99,4 @@ export type {
   DocumentMetadata,
   ConfidenceLevel,
   Classification,
-  ModelLoadProgressCallback,
 } from './classifier'
