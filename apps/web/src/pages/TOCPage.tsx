@@ -73,7 +73,7 @@ export function TOCPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       {/* Header */}
-      <header className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
+      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -144,7 +144,7 @@ export function TOCPage() {
 
             {/* TOC Summary */}
             {tocEntries.length > 0 && (
-              <div className="p-4 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+              <div className="p-4 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
                 <h3 className="text-sm font-medium text-surface-900 dark:text-white mb-3">
                   TOC Summary
                 </h3>
@@ -179,7 +179,7 @@ export function TOCPage() {
           {/* Right Column: Preview */}
           {showPreview && (
             <div className="lg:sticky lg:top-24 lg:self-start">
-              <div className="bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800 overflow-hidden">
+              <div className="bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800 overflow-hidden">
                 <div className="px-4 py-3 border-b border-surface-200 dark:border-surface-700">
                   <h3 className="text-sm font-medium text-surface-900 dark:text-white">
                     PDF Preview
@@ -195,7 +195,7 @@ export function TOCPage() {
         </div>
 
         {/* Tips Section */}
-        <div className="mt-8 p-6 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+        <div className="mt-8 p-6 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
           <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">
             Tips for generating a Table of Contents
           </h2>
@@ -253,7 +253,7 @@ export function TOCPage() {
 
         {/* How It Works Section */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-5 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-5 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
               <span className="text-lg font-bold text-primary-600 dark:text-primary-400">1</span>
             </div>
@@ -265,7 +265,7 @@ export function TOCPage() {
             </p>
           </div>
 
-          <div className="p-5 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-5 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
               <span className="text-lg font-bold text-primary-600 dark:text-primary-400">2</span>
             </div>
@@ -277,7 +277,7 @@ export function TOCPage() {
             </p>
           </div>
 
-          <div className="p-5 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-5 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
               <span className="text-lg font-bold text-primary-600 dark:text-primary-400">3</span>
             </div>

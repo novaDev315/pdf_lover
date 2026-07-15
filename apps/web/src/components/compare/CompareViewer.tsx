@@ -320,7 +320,7 @@ export function CompareViewer({
   return (
     <div className={cn('flex flex-col h-full', className)}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800">
+      <div className="flex items-center justify-between px-4 py-2 bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800">
         {/* View mode toggle */}
         <div className="flex items-center gap-2">
           <Toggle

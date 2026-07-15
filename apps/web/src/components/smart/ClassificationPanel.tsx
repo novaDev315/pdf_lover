@@ -177,7 +177,7 @@ function ClassificationResult({
     <div className="border border-surface-200 dark:border-surface-700 rounded-lg overflow-hidden">
       {/* Header */}
       <div
-        className="flex items-center gap-3 p-4 bg-white dark:bg-surface-800 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-750"
+        className="flex items-center gap-3 p-4 bg-card dark:bg-surface-800 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-750"
         onClick={onToggleExpand}
       >
         <FileText className="h-5 w-5 text-surface-400 flex-shrink-0" />

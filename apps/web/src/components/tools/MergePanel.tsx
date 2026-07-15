@@ -86,7 +86,7 @@ function SortableFileItem({ item, onRemove }: SortableFileItemProps) {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-3 p-3 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700',
+        'flex items-center gap-3 p-3 bg-card dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700',
         isDragging && 'shadow-lg opacity-90 z-10'
       )}
     >

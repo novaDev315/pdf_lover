@@ -274,7 +274,7 @@ export function DiffOverlay({
 
       {/* Opacity control */}
       {showOpacityControl && (
-        <div className="absolute bottom-4 left-4 right-4 bg-white/90 dark:bg-surface-800/90 rounded-lg p-3 shadow-lg backdrop-blur-sm">
+        <div className="absolute bottom-4 left-4 right-4 bg-card/90 dark:bg-surface-800/90 rounded-lg p-3 shadow-lg backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <span className="text-xs text-surface-600 dark:text-surface-400 whitespace-nowrap">
               Opacity
@@ -295,7 +295,7 @@ export function DiffOverlay({
       )}
 
       {/* Legend */}
-      <div className="absolute top-4 right-4 bg-white/90 dark:bg-surface-800/90 rounded-lg p-2 shadow-lg backdrop-blur-sm text-xs">
+      <div className="absolute top-4 right-4 bg-card/90 dark:bg-surface-800/90 rounded-lg p-2 shadow-lg backdrop-blur-sm text-xs">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <div

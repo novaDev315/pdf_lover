@@ -49,6 +49,35 @@
 
     <title>PDFLover - Your Privacy-First PDF Tool</title>
 
+    <script>
+      (() => {
+        const root = document.documentElement;
+        const systemTheme = () =>
+          window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+        try {
+          const settings = JSON.parse(localStorage.getItem('pdflover-settings') || 'null')?.state;
+          const theme = settings?.theme === 'light' || settings?.theme === 'dark'
+            ? settings.theme
+            : systemTheme();
+
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+
+          if (settings?.appearance?.accentColor) {
+            root.dataset.accent = settings.appearance.accentColor;
+          }
+          if (settings?.appearance?.fontSize) {
+            root.dataset.fontSize = settings.appearance.fontSize;
+          }
+        } catch {
+          const theme = systemTheme();
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+        }
+      })();
+    </script>
+
   </head>
   <body>
     <div id="root"></div>

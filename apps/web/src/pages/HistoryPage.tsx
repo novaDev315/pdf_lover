@@ -179,7 +179,7 @@ function HistoryRow({
           ? 'bg-primary-50 dark:bg-primary-950 border-primary-300 dark:border-primary-700'
           : isCurrent
           ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
-          : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-750'
+          : 'bg-card dark:bg-surface-800 border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-750'
       )}
     >
       {/* Checkbox */}

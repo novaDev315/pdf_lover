@@ -325,7 +325,7 @@ export function ExtractImagesPanel({ className }: ExtractImagesPanelProps) {
           />
         ) : (
           <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
-            <div className="flex-shrink-0 w-12 h-16 bg-white dark:bg-surface-700 rounded flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-16 bg-card dark:bg-surface-700 rounded flex items-center justify-center">
               <FileText className="h-6 w-6 text-surface-400" />
             </div>
             <div className="flex-1 min-w-0">
@@ -759,7 +759,7 @@ function ImageGallery({
           {/* Selection checkbox */}
           <div
             className={cn(
-              'absolute top-2 left-2 w-5 h-5 rounded border-2 flex items-center justify-center bg-white dark:bg-surface-900 transition-opacity',
+              'absolute top-2 left-2 w-5 h-5 rounded border-2 flex items-center justify-center bg-card dark:bg-surface-900 transition-opacity',
               selectedImages.has(img.index)
                 ? 'border-primary-500 bg-primary-500 dark:bg-primary-500 opacity-100'
                 : 'border-surface-300 dark:border-surface-600 opacity-0 group-hover:opacity-100'
@@ -838,7 +838,7 @@ function ImagePreviewModal({
       onClick={onClose}
     >
       <div
-        className="relative max-w-4xl max-h-[90vh] bg-white dark:bg-surface-900 rounded-lg overflow-hidden"
+        className="relative max-w-4xl max-h-[90vh] bg-card dark:bg-surface-900 rounded-lg overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-surface-200 dark:border-surface-700">

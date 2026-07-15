@@ -547,7 +547,7 @@ export function SignaturePanel({ className }: SignaturePanelProps) {
               />
             </div>
             {typedSignature && (
-              <div className="p-4 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
+              <div className="p-4 bg-card dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
                 <p className="text-xs text-surface-500 mb-2">Preview:</p>
                 <p
                   className="text-2xl font-serif italic text-blue-800 dark:text-blue-300"
@@ -563,7 +563,7 @@ export function SignaturePanel({ className }: SignaturePanelProps) {
           <TabsContent value="upload" className="space-y-4 mt-4">
             {uploadedSignature ? (
               <div className="space-y-3">
-                <div className="p-4 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
+                <div className="p-4 bg-card dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
                   <p className="text-xs text-surface-500 mb-2">Preview:</p>
                   <img
                     src={uploadedSignature}

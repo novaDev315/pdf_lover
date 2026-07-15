@@ -145,7 +145,7 @@ export function BatchPanel({
     return (
       <div
         className={cn(
-          'flex flex-col items-center gap-2 p-2 bg-white dark:bg-surface-900 border-l border-surface-200 dark:border-surface-700',
+          'flex flex-col items-center gap-2 p-2 bg-card dark:bg-surface-900 border-l border-surface-200 dark:border-surface-700',
           className
         )}
       >
@@ -187,7 +187,7 @@ export function BatchPanel({
   return (
     <div
       className={cn(
-        'flex flex-col w-80 bg-white dark:bg-surface-900 border-l border-surface-200 dark:border-surface-700',
+        'flex flex-col w-80 bg-card dark:bg-surface-900 border-l border-surface-200 dark:border-surface-700',
         className
       )}
     >

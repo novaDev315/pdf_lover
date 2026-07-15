@@ -59,7 +59,7 @@ export function DigitalSignaturePanel() {
 
   return (
     <form
-      className="space-y-5 rounded-lg border border-surface-200 bg-white p-6 dark:border-surface-800 dark:bg-surface-900"
+      className="space-y-5 rounded-lg border border-surface-200 bg-card p-6 dark:border-surface-800 dark:bg-surface-900"
       onSubmit={(event) => {
         event.preventDefault();
         void sign();

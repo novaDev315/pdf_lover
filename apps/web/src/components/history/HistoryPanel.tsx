@@ -87,7 +87,7 @@ function HistoryEntryItem({
         'group flex items-start gap-3 p-3 rounded-lg border transition-colors',
         isCurrentIndex
           ? 'bg-primary-50 dark:bg-primary-950 border-primary-200 dark:border-primary-800'
-          : 'bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-750'
+          : 'bg-card dark:bg-surface-800 border-surface-200 dark:border-surface-700 hover:bg-surface-50 dark:hover:bg-surface-750'
       )}
     >
       <OperationBadge type={entry.type} size="md" showTooltip />

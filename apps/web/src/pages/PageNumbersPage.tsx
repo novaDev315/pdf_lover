@@ -18,7 +18,7 @@ export function PageNumbersPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       {/* Header */}
-      <header className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
+      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -81,7 +81,7 @@ export function PageNumbersPage() {
         </Tabs>
 
         {/* Tips Section */}
-        <div className="mt-8 p-6 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+        <div className="mt-8 p-6 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
           <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">
             Tips for Page Elements
           </h2>
@@ -115,7 +115,7 @@ export function PageNumbersPage() {
 
         {/* Use Cases Section */}
         <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="p-4 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-4 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <h3 className="font-medium text-surface-900 dark:text-white mb-2">
               Legal Documents
             </h3>
@@ -124,7 +124,7 @@ export function PageNumbersPage() {
               Each page gets a unique identifier for easy reference.
             </p>
           </div>
-          <div className="p-4 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-4 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <h3 className="font-medium text-surface-900 dark:text-white mb-2">
               Business Reports
             </h3>
@@ -133,7 +133,7 @@ export function PageNumbersPage() {
               for professional-looking reports and presentations.
             </p>
           </div>
-          <div className="p-4 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-4 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <h3 className="font-medium text-surface-900 dark:text-white mb-2">
               Academic Papers
             </h3>
@@ -142,7 +142,7 @@ export function PageNumbersPage() {
               with paper titles for thesis and dissertation submissions.
             </p>
           </div>
-          <div className="p-4 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+          <div className="p-4 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
             <h3 className="font-medium text-surface-900 dark:text-white mb-2">
               Confidential Documents
             </h3>

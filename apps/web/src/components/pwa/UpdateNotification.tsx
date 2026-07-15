@@ -70,7 +70,7 @@ export function UpdateNotification({
     >
       <div
         className={cn(
-          'mx-auto max-w-md rounded-lg border bg-white p-4 shadow-lg dark:bg-surface-900',
+          'mx-auto max-w-md rounded-lg border bg-card p-4 shadow-lg dark:bg-surface-900',
           'border-primary-200 dark:border-primary-800',
           'animate-in',
           position === 'top' ? 'slide-in-from-top' : 'slide-in-from-bottom',

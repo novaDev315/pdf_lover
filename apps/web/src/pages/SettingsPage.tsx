@@ -385,7 +385,7 @@ export function SettingsPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       {/* Header */}
-      <header className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
+      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-4 h-16">
             <Button variant="ghost" size="icon" asChild>

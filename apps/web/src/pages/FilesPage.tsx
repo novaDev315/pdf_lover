@@ -61,7 +61,7 @@ export function FilesPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-      <header className="border-b bg-white dark:bg-surface-900">
+      <header className="border-b bg-card dark:bg-surface-900">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="icon" asChild>

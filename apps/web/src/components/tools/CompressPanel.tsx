@@ -278,7 +278,7 @@ export function CompressPanel({ className }: CompressPanelProps) {
           />
         ) : (
           <div className="flex items-center gap-4 p-4 bg-surface-50 dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700">
-            <div className="flex-shrink-0 w-12 h-16 bg-white dark:bg-surface-700 rounded flex items-center justify-center">
+            <div className="flex-shrink-0 w-12 h-16 bg-card dark:bg-surface-700 rounded flex items-center justify-center">
               <FileText className="h-6 w-6 text-surface-400" />
             </div>
             <div className="flex-1 min-w-0">
@@ -356,7 +356,7 @@ export function CompressPanel({ className }: CompressPanelProps) {
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="flex-1 text-center p-3 bg-white dark:bg-surface-700 rounded-lg">
+              <div className="flex-1 text-center p-3 bg-card dark:bg-surface-700 rounded-lg">
                 <p className="text-xs text-surface-500 dark:text-surface-400 mb-1">
                   Original
                 </p>

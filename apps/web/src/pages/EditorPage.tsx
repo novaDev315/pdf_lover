@@ -576,7 +576,7 @@ export function EditorPage() {
     return (
       <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
         {/* Header */}
-        <header className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
+        <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
           <div className="max-w-full mx-auto px-4">
             <div className="flex items-center justify-between h-14">
               <div className="flex items-center gap-4">
@@ -602,7 +602,7 @@ export function EditorPage() {
             className={cn(
               'w-full max-w-2xl p-12 border-2 border-dashed rounded-xl',
               'border-surface-300 dark:border-surface-700',
-              'bg-white dark:bg-surface-900',
+              'bg-card dark:bg-surface-900',
               'flex flex-col items-center justify-center gap-6',
               'cursor-pointer hover:border-primary-500 transition-colors'
             )}
@@ -674,7 +674,7 @@ export function EditorPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col">
       {/* Header */}
-      <header className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-20">
+      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-20">
         <div className="px-4">
           <div className="flex items-center justify-between h-14">
             {/* Left Section */}
@@ -790,7 +790,7 @@ export function EditorPage() {
       </header>
 
       {/* Annotation Toolbar */}
-      <div className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 px-4 py-2">
+      <div className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 px-4 py-2">
         <AnnotationToolbar />
       </div>
 
@@ -804,7 +804,7 @@ export function EditorPage() {
       <main className="flex-1 flex overflow-hidden">
         {/* Thumbnails Sidebar */}
         {showThumbnails && (
-          <aside className="w-48 bg-white dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800 overflow-y-auto">
+          <aside className="w-48 bg-card dark:bg-surface-900 border-r border-surface-200 dark:border-surface-800 overflow-y-auto">
             <div className="p-2 space-y-2">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
                 <button
@@ -902,7 +902,7 @@ export function EditorPage() {
 
         {/* Properties Panel */}
         {showProperties && selectedAnnotation && (
-          <aside className="w-64 bg-white dark:bg-surface-900 border-l border-surface-200 dark:border-surface-800 overflow-y-auto">
+          <aside className="w-64 bg-card dark:bg-surface-900 border-l border-surface-200 dark:border-surface-800 overflow-y-auto">
             <div className="p-4">
               <h3 className="font-medium mb-4">Annotation Properties</h3>
               <div className="space-y-3 text-sm">

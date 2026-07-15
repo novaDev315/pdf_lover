@@ -63,7 +63,7 @@ function ToolCard({ tool }: { tool: ToolDefinition }) {
       aria-label={`Open ${tool.name}`}
       className="group block rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
     >
-      <article className="h-full rounded-2xl border border-surface-200 bg-white p-5 shadow-sm transition duration-200 group-hover:-translate-y-0.5 group-hover:border-primary-300 group-hover:shadow-md dark:border-surface-800 dark:bg-surface-900 dark:group-hover:border-primary-700">
+      <article className="h-full rounded-2xl border border-surface-200 bg-card p-5 shadow-sm transition duration-200 group-hover:-translate-y-0.5 group-hover:border-primary-300 group-hover:shadow-md dark:border-surface-800 dark:bg-surface-900 dark:group-hover:border-primary-700">
         <div className="flex items-start gap-4">
           <div
             className={cn(
@@ -236,7 +236,7 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-      <header className="sticky top-0 z-20 border-b border-surface-200 bg-white dark:border-surface-800 dark:bg-surface-900">
+      <header className="sticky top-0 z-20 border-b border-surface-200 bg-card dark:border-surface-800 dark:bg-surface-900">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <Link
             to="/"
@@ -299,7 +299,7 @@ export function Dashboard() {
             </div>
           </div>
 
-          <aside className="rounded-2xl border border-surface-200 bg-white p-5 shadow-sm dark:border-surface-800 dark:bg-surface-900" aria-label="Privacy model">
+          <aside className="rounded-2xl border border-surface-200 bg-card p-5 shadow-sm dark:border-surface-800 dark:bg-surface-900" aria-label="Privacy model">
             <div className="flex gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                 <ShieldCheck className="h-5 w-5" aria-hidden="true" />
@@ -338,7 +338,7 @@ export function Dashboard() {
                 value={toolQuery}
                 onChange={(event) => setToolQuery(event.target.value)}
                 placeholder="Search tools, formats, or tasks…"
-                className="h-11 rounded-xl bg-white pl-10 pr-10 dark:bg-surface-900"
+                className="h-11 rounded-xl bg-card pl-10 pr-10 dark:bg-surface-900"
               />
               {toolQuery && (
                 <button
@@ -362,7 +362,7 @@ export function Dashboard() {
                 'min-h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                 activeCategory === 'all'
                   ? 'border-primary-600 bg-primary-600 text-white'
-                  : 'border-surface-200 bg-white text-surface-700 hover:border-primary-300 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-300',
+                  : 'border-surface-200 bg-card text-surface-700 hover:border-primary-300 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-300',
               )}
             >
               All {TOOL_CATALOG.length}
@@ -379,7 +379,7 @@ export function Dashboard() {
                     'min-h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                     activeCategory === category.id
                       ? 'border-primary-600 bg-primary-600 text-white'
-                      : 'border-surface-200 bg-white text-surface-700 hover:border-primary-300 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-300',
+                      : 'border-surface-200 bg-card text-surface-700 hover:border-primary-300 dark:border-surface-700 dark:bg-surface-900 dark:text-surface-300',
                   )}
                 >
                   {category.name} {count}
@@ -412,7 +412,7 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <div className="mt-8 rounded-2xl border border-dashed border-surface-300 bg-white px-6 py-12 text-center dark:border-surface-700 dark:bg-surface-900">
+            <div className="mt-8 rounded-2xl border border-dashed border-surface-300 bg-card px-6 py-12 text-center dark:border-surface-700 dark:bg-surface-900">
               <Search className="mx-auto h-8 w-8 text-surface-400" aria-hidden="true" />
               <h3 className="mt-3 font-semibold text-surface-950 dark:text-white">No matching tools</h3>
               <p className="mt-1 text-sm text-surface-500 dark:text-surface-400">

@@ -8,64 +8,64 @@
    ===================================================== */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 38 31% 97%;
+    --foreground: 26 21% 14%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 40 60% 98%;
+    --card-foreground: 26 21% 14%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 40 60% 98%;
+    --popover-foreground: 26 21% 14%;
 
     --primary: 0 72% 51%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 35 26% 92%;
+    --secondary-foreground: 26 18% 20%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 35 22% 93%;
+    --muted-foreground: 28 11% 43%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 34 25% 91%;
+    --accent-foreground: 26 19% 19%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 32 20% 84%;
+    --input: 32 20% 84%;
     --ring: 0 72% 51%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+    --background: 27 18% 9%;
+    --foreground: 38 22% 90%;
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+    --card: 28 16% 12%;
+    --card-foreground: 38 22% 90%;
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 28 16% 12%;
+    --popover-foreground: 38 22% 90%;
 
     --primary: 0 72% 51%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 29 14% 18%;
+    --secondary-foreground: 38 20% 90%;
 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 29 13% 18%;
+    --muted-foreground: 32 11% 65%;
 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 30 14% 21%;
+    --accent-foreground: 38 20% 90%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 30 12% 24%;
+    --input: 30 12% 24%;
     --ring: 0 72% 51%;
   }
 }
@@ -100,18 +100,19 @@
   --color-accent-900: #1e3a8a;
   --color-accent-950: #172554;
 
-  /* Surface colors - Gray */
-  --color-surface-50: #f9fafb;
-  --color-surface-100: #f3f4f6;
-  --color-surface-200: #e5e7eb;
-  --color-surface-300: #d1d5db;
-  --color-surface-400: #9ca3af;
-  --color-surface-500: #6b7280;
-  --color-surface-600: #4b5563;
-  --color-surface-700: #374151;
-  --color-surface-800: #1f2937;
-  --color-surface-900: #111827;
-  --color-surface-950: #030712;
+  /* Warm neutral surfaces for comfortable document-focused sessions */
+  --color-surface-50: #fbf8f3;
+  --color-surface-100: #f4eee6;
+  --color-surface-200: #e7ddd1;
+  --color-surface-300: #d4c5b5;
+  --color-surface-400: #aa9987;
+  --color-surface-500: #7e7062;
+  --color-surface-600: #61564b;
+  --color-surface-700: #494038;
+  --color-surface-750: #3c342d;
+  --color-surface-800: #302922;
+  --color-surface-900: #211c18;
+  --color-surface-950: #17130f;
 }
 
 /* Dark mode color overrides */
@@ -219,6 +220,11 @@ html[data-accent='red'] { --accent-50: #fef2f2; --accent-100: #fee2e2; --accent-
     @apply bg-background text-foreground;
     min-height: 100vh;
   }
+}
+
+/* Keep dark headings warm; true-white action labels remain unchanged. */
+.dark [class~='dark:text-white'] {
+  color: hsl(var(--foreground)) !important;
 }
 
 /* =====================================================

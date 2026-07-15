@@ -184,7 +184,7 @@ interface StatCardProps {
 function StatCard({ icon, label, value, description, colorClass }: StatCardProps) {
   return (
     <div className="flex items-start gap-3 p-3 bg-surface-50 dark:bg-surface-800/50 rounded-lg">
-      <div className={cn('p-2 rounded-lg bg-white dark:bg-surface-700', colorClass)}>
+      <div className={cn('p-2 rounded-lg bg-card dark:bg-surface-700', colorClass)}>
         {icon}
       </div>
       <div className="flex-1 min-w-0">

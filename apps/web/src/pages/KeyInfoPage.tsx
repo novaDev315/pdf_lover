@@ -152,7 +152,7 @@ export function KeyInfoPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col">
       {/* Header */}
-      <header className="bg-white dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
+      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
@@ -190,7 +190,7 @@ export function KeyInfoPage() {
             )}
           >
             {/* PDF Toolbar */}
-            <div className="flex items-center justify-between p-2 bg-white dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700">
+            <div className="flex items-center justify-between p-2 bg-card dark:bg-surface-800 border-b border-surface-200 dark:border-surface-700">
               {isPdfPanelExpanded ? (
                 <>
                   <div className="flex items-center gap-2">
@@ -324,7 +324,7 @@ export function KeyInfoPage() {
               </div>
 
               {/* Tips Section */}
-              <div className="p-6 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+              <div className="p-6 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
                 <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">
                   Tips for best results
                 </h2>
@@ -353,7 +353,7 @@ export function KeyInfoPage() {
               </div>
 
               {/* Supported Formats */}
-              <div className="p-6 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+              <div className="p-6 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
                 <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">
                   What can be extracted
                 </h2>
@@ -420,7 +420,7 @@ interface FeatureCardProps {
 
 function FeatureCard({ title, description }: FeatureCardProps) {
   return (
-    <div className="p-4 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
+    <div className="p-4 bg-card dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
       <h3 className="font-medium text-surface-900 dark:text-white mb-1">{title}</h3>
       <p className="text-xs text-surface-500 dark:text-surface-400">{description}</p>
     </div>

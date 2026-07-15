@@ -113,7 +113,7 @@ function PagePreview({
   return (
     <div className="border border-surface-200 dark:border-surface-700 rounded-lg p-4 bg-surface-50 dark:bg-surface-900">
       <div className="text-xs text-center text-surface-500 mb-2">Page Preview</div>
-      <div className="aspect-[8.5/11] border border-dashed border-surface-300 dark:border-surface-600 rounded bg-white dark:bg-surface-800 relative overflow-hidden">
+      <div className="aspect-[8.5/11] border border-dashed border-surface-300 dark:border-surface-600 rounded bg-card dark:bg-surface-800 relative overflow-hidden">
         {/* Header area */}
         <div className={cn('absolute top-3 left-3 right-3 flex items-center', alignClass[headerAlignment])}>
           {headerImage ? (

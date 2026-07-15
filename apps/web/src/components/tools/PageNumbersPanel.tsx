@@ -62,7 +62,7 @@ function PositionGrid({ selected, onChange, disabled }: PositionGridProps) {
   return (
     <div className="border border-surface-200 dark:border-surface-700 rounded-lg p-4 bg-surface-50 dark:bg-surface-900">
       <div className="text-xs text-center text-surface-500 mb-2">Page Preview</div>
-      <div className="aspect-[8.5/11] border border-dashed border-surface-300 dark:border-surface-600 rounded bg-white dark:bg-surface-800 relative">
+      <div className="aspect-[8.5/11] border border-dashed border-surface-300 dark:border-surface-600 rounded bg-card dark:bg-surface-800 relative">
         {/* Top row */}
         <div className="absolute top-2 left-0 right-0 flex justify-between px-2">
           {positions[0]!.map((pos) => (

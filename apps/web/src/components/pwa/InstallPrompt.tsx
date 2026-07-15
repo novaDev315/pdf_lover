@@ -161,7 +161,7 @@ export function InstallPrompt({
   return (
     <div
       className={cn(
-        'fixed bottom-0 left-0 right-0 z-50 border-t border-surface-200 bg-white p-4 shadow-lg dark:border-surface-800 dark:bg-surface-900',
+        'fixed bottom-0 left-0 right-0 z-50 border-t border-surface-200 bg-card p-4 shadow-lg dark:border-surface-800 dark:bg-surface-900',
         'animate-in slide-in-from-bottom duration-300',
         className
       )}

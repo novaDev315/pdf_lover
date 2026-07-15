@@ -160,7 +160,7 @@ function SortableTOCItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-2 p-2 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700",
+        "flex items-center gap-2 p-2 bg-card dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700",
         isDragging && "shadow-lg opacity-90 z-10",
       )}
     >

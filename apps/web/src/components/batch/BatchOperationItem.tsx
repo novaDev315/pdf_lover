@@ -221,7 +221,7 @@ export const BatchOperationItem = React.memo(function BatchOperationItem({
         ref={setNodeRef}
         style={style}
         className={cn(
-          'flex items-center gap-2 p-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800',
+          'flex items-center gap-2 p-2 rounded-lg border border-surface-200 dark:border-surface-700 bg-card dark:bg-surface-800',
           isDragging && 'shadow-lg opacity-90 z-10',
           className
         )}
@@ -278,7 +278,7 @@ export const BatchOperationItem = React.memo(function BatchOperationItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex flex-col p-4 rounded-lg border border-surface-200 dark:border-surface-700 bg-white dark:bg-surface-800',
+        'flex flex-col p-4 rounded-lg border border-surface-200 dark:border-surface-700 bg-card dark:bg-surface-800',
         isDragging && 'shadow-lg opacity-90 z-10',
         className
       )}

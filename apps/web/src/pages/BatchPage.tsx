@@ -174,7 +174,7 @@ function SortableFileItem({
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-3 p-3 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700',
+        'flex items-center gap-3 p-3 bg-card dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700',
         isDragging && 'shadow-lg opacity-90 z-10'
       )}
     >
@@ -474,7 +474,7 @@ function OperationOptions({
               id="ocr-language"
               value={ocrOptions.language}
               onChange={(event) => onChange({ ...ocrOptions, language: event.target.value })}
-              className="w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-sm dark:border-surface-700 dark:bg-surface-900"
+              className="w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm dark:border-surface-700 dark:bg-surface-900"
             >
               {[
                 ['eng', 'English'], ['spa', 'Spanish'], ['fra', 'French'], ['deu', 'German'],
@@ -749,7 +749,7 @@ export function BatchPage() {
 
           {/* Queue Stats Bar */}
           {stats.total > 0 && (
-            <div className="flex items-center gap-4 p-3 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700 mb-6">
+            <div className="flex items-center gap-4 p-3 bg-card dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700 mb-6">
               <Layers className="h-5 w-5 text-primary-500" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-surface-900 dark:text-white">
