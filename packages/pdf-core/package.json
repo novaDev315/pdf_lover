@@ -44,10 +44,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
+    "build": "bunx tsc",
+    "dev": "bunx tsc --watch",
     "clean": "rm -rf dist",
-    "typecheck": "tsc --noEmit",
+    "lint": "bunx tsc --noEmit",
+    "typecheck": "bunx tsc --noEmit",
     "test": "vitest run --dir src/__tests__",
     "test:watch": "vitest --dir src/__tests__",
     "test:coverage": "vitest run --dir src/__tests__ --coverage"

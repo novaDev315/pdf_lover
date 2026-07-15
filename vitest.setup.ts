@@ -59,6 +59,49 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
+if (typeof globalThis.DataTransfer === 'undefined') {
+  class DataTransferItemListMock {
+    private readonly values: File[] = [];
+    [index: number]: { kind: string; type: string; getAsFile: () => File };
+
+    add(file: File) {
+      this.values.push(file);
+      const item = { kind: 'file', type: file.type, getAsFile: () => file };
+      this[this.values.length - 1] = item;
+      return item;
+    }
+
+    get length(): number {
+      return this.values.length;
+    }
+
+    [Symbol.iterator]() {
+      return Array.from({ length: this.length }, (_, index) => this[index]!)[Symbol.iterator]();
+    }
+
+    get files(): File[] {
+      return this.values;
+    }
+  }
+
+  class DataTransferMock {
+    readonly items = new DataTransferItemListMock();
+
+    get files(): FileList {
+      const files = this.items.files;
+      return Object.assign(files, {
+        item: (index: number) => files[index] ?? null,
+      }) as unknown as FileList;
+    }
+
+    readonly types = ['Files'];
+    readonly dropEffect = 'none';
+    readonly effectAllowed = 'all';
+  }
+
+  Object.defineProperty(globalThis, 'DataTransfer', { value: DataTransferMock });
+}
+
 // Clean up after each test
 afterEach(() => {
   vi.clearAllMocks();

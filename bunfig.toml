@@ -4,7 +4,3 @@ exact = true
 
 # Install peer dependencies automatically
 peer = true
-
-[run]
-# Use bun shell for scripts
-bun = true

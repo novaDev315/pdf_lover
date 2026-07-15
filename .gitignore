@@ -18,6 +18,7 @@ bun.lockb
 # Testing
 coverage/
 .nyc_output/
+.playwright-cli/
 
 # Environment files
 .env
