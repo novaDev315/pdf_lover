@@ -1,5 +1,10 @@
 # PDFLover - Complete Implementation Plan
 
+> Historical design snapshot. This document describes an earlier optional
+> backend and Docker Compose proposal and is not the current implementation or
+> deployment contract. See `ARCHITECTURE.md` and the repository's
+> `homelab.yaml` for current source-of-truth boundaries.
+
 ## Architecture Philosophy: Local-First
 
 > **Core Principle**: ALL PDF processing happens in the browser. No files are uploaded to servers.
