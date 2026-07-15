@@ -1,0 +1,52 @@
+project: pdflover
+version: v0.1
+type: monorepo
+
+build:
+  context: .
+  cache: true
+
+deploy:
+  base_domain: pdflover
+  target: web
+  host_mode: shared
+
+git:
+  remote: github
+  branch: main
+
+services:
+  backend:
+    dockerfile: apps/api/Dockerfile
+    context: .
+    domain: api
+    port: 8003
+    health_endpoint: /api/v1/health/ready
+    service_type: backend
+    env:
+      APP_ENV: "${APP_ENV:-production}"
+      BACKEND_HOST: "${BACKEND_HOST:-0.0.0.0}"
+      BACKEND_PORT: "${BACKEND_PORT:-8000}"
+      CORS_ORIGINS: "${CORS_ORIGINS:-https://web.pdflover.lab.novadev.tech}"
+      JOB_TEMP_ROOT: "${JOB_TEMP_ROOT:-/tmp/pdflover-jobs}"
+      MAX_UPLOAD_BYTES: "${MAX_UPLOAD_BYTES:-104857600}"
+      ARTIFACT_TTL_SECONDS: "${ARTIFACT_TTL_SECONDS:-1800}"
+      JOB_CLEANUP_INTERVAL_SECONDS: "${JOB_CLEANUP_INTERVAL_SECONDS:-60}"
+      GLOBAL_JOB_CONCURRENCY: "${GLOBAL_JOB_CONCURRENCY:-4}"
+      CLIENT_JOB_CONCURRENCY: "${CLIENT_JOB_CONCURRENCY:-2}"
+      PROCESS_TIMEOUT_SECONDS: "${PROCESS_TIMEOUT_SECONDS:-300}"
+      OPENROUTER_TIMEOUT_SECONDS: "${OPENROUTER_TIMEOUT_SECONDS:-90}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY:-}"
+  frontend:
+    dockerfile: apps/web/Dockerfile
+    context: .
+    domain: web
+    port: 8082
+    health_endpoint: /health
+    service_type: frontend
+    build_args:
+      VITE_API_BASE_URL: https://api.pdflover.lab.novadev.tech
+
+workspace:
+  monorepo: turborepo
+  package_manager: bun

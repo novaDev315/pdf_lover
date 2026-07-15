@@ -1,68 +1,32 @@
-# Stage 1: Dependencies
-FROM node:20-alpine AS deps
+FROM oven/bun:1.3.13-debian AS dependencies
 WORKDIR /app
 
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+COPY package.json bun.lock bunfig.toml turbo.json tsconfig.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY packages/pdf-core/package.json packages/pdf-core/package.json
+COPY packages/shared/package.json packages/shared/package.json
+RUN bun install --frozen-lockfile
 
-# Copy package files
-COPY package.json pnpm-lock.yaml* pnpm-workspace.yaml* ./
-COPY apps/web/package.json ./apps/web/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/pdf-core/package.json ./packages/pdf-core/
+FROM dependencies AS builder
+ARG VITE_API_BASE_URL=https://api.pdflover.lab.novadev.tech
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+COPY apps/web apps/web
+COPY packages/pdf-core packages/pdf-core
+COPY packages/shared packages/shared
+RUN bunx tsc --build packages/shared/tsconfig.json packages/pdf-core/tsconfig.json --force \
+    && test -f packages/shared/dist/index.d.ts \
+    && test -f packages/pdf-core/dist/index.d.ts
+RUN bun run --filter @pdflover/web build
 
-# Install dependencies
-RUN pnpm install --frozen-lockfile --ignore-scripts
-
-# Stage 2: Build
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-# Install pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
-
-# Copy dependencies from deps stage
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=deps /app/packages/pdf-core/node_modules ./packages/pdf-core/node_modules
-
-# Copy source code
-COPY . .
-
-# Build the application
-ENV NODE_ENV=production
-RUN pnpm --filter web build
-
-# Stage 3: Production
-FROM nginx:alpine AS production
-
-# Copy nginx configuration
-COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
-
-# Copy built assets from builder stage
+FROM nginxinc/nginx-unprivileged:1.29-alpine AS production
+COPY apps/web/nginx.conf /etc/nginx/nginx.conf
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+RUN nginx -t \
+    && find /usr/share/nginx/html/assets -type f -name '*.mjs' -print -quit | grep -q .
 
-# Create health check endpoint
-RUN mkdir -p /usr/share/nginx/html && \
-    echo '{"status":"ok"}' > /usr/share/nginx/html/health
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD wget --quiet --tries=1 --spider http://127.0.0.1:8080/health || exit 1
 
-# Add non-root user for security
-RUN addgroup -g 1001 -S pdflover && \
-    adduser -S -D -H -u 1001 -h /var/cache/nginx -s /sbin/nologin -G pdflover pdflover && \
-    chown -R pdflover:pdflover /var/cache/nginx && \
-    chown -R pdflover:pdflover /var/log/nginx && \
-    chown -R pdflover:pdflover /etc/nginx/conf.d && \
-    touch /var/run/nginx.pid && \
-    chown -R pdflover:pdflover /var/run/nginx.pid && \
-    chown -R pdflover:pdflover /usr/share/nginx/html
-
-# Expose port 80
-EXPOSE 80
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1
-
-# Run nginx in foreground
 CMD ["nginx", "-g", "daemon off;"]
