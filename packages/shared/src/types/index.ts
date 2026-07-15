@@ -65,4 +65,25 @@ export type {
   StorageEventListener,
   DocumentQueryOptions,
   QueryResult,
+  DocumentBlobRecord,
+  DocumentVersionSource,
+  DocumentVersion,
+  StoredOperationStatus,
+  StoredOperationRun,
+  StoredOperationArtifact,
 } from './storage.js';
+
+// Backend operation and capability contracts
+export type {
+  OperationEngine,
+  OperationStatus,
+  ServerOperationKind,
+  OperationErrorCode,
+  OperationError,
+  OperationProgress,
+  OperationArtifact,
+  OperationJob,
+  EngineCapability,
+  ApiCapabilities,
+  ApiErrorResponse,
+} from './operations.js';

@@ -70,10 +70,78 @@ export interface StoredDocument {
   folderId?: string;
   /** Original file hash (SHA-256) */
   fileHash?: string;
+  /** Immutable version that contains the originally imported bytes */
+  originalVersionId?: string;
+  /** Immutable version currently opened by the workspace */
+  currentVersionId?: string;
   /** Cloud sync status */
   syncStatus?: SyncStatus;
   /** Cloud sync timestamp */
   lastSyncedAt?: Date;
+}
+
+/** A byte payload stored separately from document metadata. */
+export interface DocumentBlobRecord {
+  id: string;
+  /** Present for document versions; generated operation artifacts may be standalone. */
+  documentId?: string;
+  data: Blob;
+  size: number;
+  sha256: string;
+  createdAt: Date;
+}
+
+export type DocumentVersionSource =
+  | 'import'
+  | 'editor-save'
+  | 'local-operation'
+  | 'server-operation';
+
+/** Immutable link between a document revision and its stored bytes. */
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  blobId: string;
+  versionNumber: number;
+  source: DocumentVersionSource;
+  label?: string;
+  parentVersionId?: string;
+  createdAt: Date;
+}
+
+export type StoredOperationStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled';
+
+/** Reload-safe history for browser and backend operations. */
+export interface StoredOperationRun {
+  id: string;
+  documentId?: string;
+  operation: string;
+  engine: 'local' | 'server';
+  status: StoredOperationStatus;
+  progress: number;
+  errorCode?: string;
+  errorMessage?: string;
+  createdAt: Date;
+  updatedAt: Date;
+  completedAt?: Date;
+}
+
+/** A generated artifact linked to a persisted operation run. */
+export interface StoredOperationArtifact {
+  id: string;
+  runId: string;
+  documentId?: string;
+  blobId: string;
+  filename: string;
+  mediaType: string;
+  size: number;
+  sha256: string;
+  createdAt: Date;
 }
 
 /**
