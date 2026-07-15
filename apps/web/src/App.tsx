@@ -1,32 +1,7 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-import {
-  MergePage,
-  SplitPage,
-  CompressPage,
-  ConvertPage,
-  Dashboard,
-  SecurityPage,
-  WatermarkPage,
-  SignaturePage,
-  ChatPage,
-  EditorPage,
-  SettingsPage,
-  SearchReplacePage,
-  BatchPage,
-  ExtractImagesPage,
-  ExtractTablesPage,
-  PageNumbersPage,
-  CropResizePage,
-  ComparePage,
-  TOCPage,
-  FormDetectionPage,
-  ClassifyPage,
-  HistoryPage,
-  KeyInfoPage,
-  FilesPage,
-} from "@/pages";
+import { Dashboard } from "@/pages/Dashboard";
 import {
   InstallPrompt,
   UpdateNotification,
@@ -40,10 +15,49 @@ import { SettingsEffects } from "@/components/layout/SettingsEffects";
 import { AppFooter } from "@/components/layout/AppFooter";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+const MergePage = lazy(() => import("@/pages/MergePage").then(({ MergePage }) => ({ default: MergePage })));
+const SplitPage = lazy(() => import("@/pages/SplitPage").then(({ SplitPage }) => ({ default: SplitPage })));
+const CompressPage = lazy(() => import("@/pages/CompressPage").then(({ CompressPage }) => ({ default: CompressPage })));
+const ConvertPage = lazy(() => import("@/pages/ConvertPage").then(({ ConvertPage }) => ({ default: ConvertPage })));
+const SecurityPage = lazy(() => import("@/pages/SecurityPage").then(({ SecurityPage }) => ({ default: SecurityPage })));
+const WatermarkPage = lazy(() => import("@/pages/WatermarkPage").then(({ WatermarkPage }) => ({ default: WatermarkPage })));
+const SignaturePage = lazy(() => import("@/pages/SignaturePage").then(({ SignaturePage }) => ({ default: SignaturePage })));
+const ChatPage = lazy(() => import("@/pages/ChatPage").then(({ ChatPage }) => ({ default: ChatPage })));
+const EditorPage = lazy(() => import("@/pages/EditorPage").then(({ EditorPage }) => ({ default: EditorPage })));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage").then(({ SettingsPage }) => ({ default: SettingsPage })));
+const SearchReplacePage = lazy(() => import("@/pages/SearchReplacePage").then(({ SearchReplacePage }) => ({ default: SearchReplacePage })));
+const BatchPage = lazy(() => import("@/pages/BatchPage").then(({ BatchPage }) => ({ default: BatchPage })));
+const ExtractImagesPage = lazy(() => import("@/pages/ExtractImagesPage").then(({ ExtractImagesPage }) => ({ default: ExtractImagesPage })));
+const ExtractTablesPage = lazy(() => import("@/pages/ExtractTablesPage").then(({ ExtractTablesPage }) => ({ default: ExtractTablesPage })));
+const PageNumbersPage = lazy(() => import("@/pages/PageNumbersPage").then(({ PageNumbersPage }) => ({ default: PageNumbersPage })));
+const CropResizePage = lazy(() => import("@/pages/CropResizePage").then(({ CropResizePage }) => ({ default: CropResizePage })));
+const ComparePage = lazy(() => import("@/pages/ComparePage").then(({ ComparePage }) => ({ default: ComparePage })));
+const TOCPage = lazy(() => import("@/pages/TOCPage").then(({ TOCPage }) => ({ default: TOCPage })));
+const FormDetectionPage = lazy(() => import("@/pages/FormDetectionPage").then(({ FormDetectionPage }) => ({ default: FormDetectionPage })));
+const ClassifyPage = lazy(() => import("@/pages/ClassifyPage").then(({ ClassifyPage }) => ({ default: ClassifyPage })));
+const HistoryPage = lazy(() => import("@/pages/HistoryPage").then(({ HistoryPage }) => ({ default: HistoryPage })));
+const KeyInfoPage = lazy(() => import("@/pages/KeyInfoPage").then(({ KeyInfoPage }) => ({ default: KeyInfoPage })));
+const FilesPage = lazy(() => import("@/pages/FilesPage").then(({ FilesPage }) => ({ default: FilesPage })));
+
+function RouteLoading() {
+  return (
+    <div
+      className="flex min-h-[60vh] items-center justify-center bg-surface-50 px-6 dark:bg-surface-950"
+      role="status"
+      aria-live="polite"
+    >
+      <div className="flex items-center gap-3 text-sm font-medium text-surface-600 dark:text-surface-300">
+        <span className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        Loading workspace…
+      </div>
+    </div>
+  );
+}
+
 function ToolPage({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-surface-50 dark:bg-surface-950">
-      {children}
+      <Suspense fallback={<RouteLoading />}>{children}</Suspense>
       <AppFooter />
     </div>
   );

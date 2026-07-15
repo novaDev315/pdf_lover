@@ -19,10 +19,24 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'pdf-libs': ['pdfjs-dist', 'pdf-lib'],
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'state': ['zustand', '@tanstack/react-query'],
+        onlyExplicitManualChunks: true,
+        manualChunks(id) {
+          if (id.includes('commonjsHelpers')) return 'vendor-runtime';
+          if (id.includes('/pdfjs-dist/') || id.includes('/pdf-lib/')) {
+            return 'pdf-libs';
+          }
+          if (
+            id.includes('/react/') ||
+            id.includes('/react-dom/') ||
+            id.includes('/react-router/') ||
+            id.includes('/react-router-dom/') ||
+            id.includes('/scheduler/')
+          ) {
+            return 'react-vendor';
+          }
+          if (id.includes('/zustand/') || id.includes('/@tanstack/react-query/')) {
+            return 'state';
+          }
         },
       },
     },

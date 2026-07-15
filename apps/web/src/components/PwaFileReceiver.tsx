@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { importPdfFiles } from '@/lib/import-pdf-files';
 import { useFileStore } from '@/store/file-store';
 
 interface PendingShare {
@@ -67,6 +66,11 @@ function reportFailures(failures: Array<{ filename: string; message: string }>):
   );
 }
 
+async function importReceivedPdfFiles(files: Iterable<File>) {
+  const { importPdfFiles } = await import('@/lib/import-pdf-files');
+  return importPdfFiles(files);
+}
+
 /** Receives files from installed-PWA share targets and operating-system file handlers. */
 export function PwaFileReceiver() {
   const navigate = useNavigate();
@@ -86,7 +90,7 @@ export function PwaFileReceiver() {
     void claimSharedFiles()
       .then(async (files) => {
         if (cancelled || files.length === 0) return;
-        const result = await importPdfFiles(files);
+        const result = await importReceivedPdfFiles(files);
         if (cancelled) return;
         reportFailures(result.failures);
         navigate('/files');
@@ -101,7 +105,7 @@ export function PwaFileReceiver() {
 
     window.launchQueue?.setConsumer((params) => {
       void Promise.all(params.files.map((handle) => handle.getFile()))
-        .then(importPdfFiles)
+        .then(importReceivedPdfFiles)
         .then((result) => {
           reportFailures(result.failures);
           navigate('/files');
