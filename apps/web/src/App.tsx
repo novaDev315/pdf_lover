@@ -134,7 +134,7 @@ function App() {
               <Route path="/signature" element={<ToolPage><SignaturePage /></ToolPage>} />
               <Route path="/chat" element={<ToolPage><ChatPage /></ToolPage>} />
               <Route path="/editor" element={<ToolPage><EditorPage /></ToolPage>} />
-              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/settings" element={<ToolPage><SettingsPage /></ToolPage>} />
               <Route path="/search" element={<ToolPage><SearchReplacePage /></ToolPage>} />
               <Route path="/batch" element={<ToolPage><BatchPage /></ToolPage>} />
               <Route path="/extract-images" element={<ToolPage><ExtractImagesPage /></ToolPage>} />
@@ -145,9 +145,9 @@ function App() {
               <Route path="/toc" element={<ToolPage><TOCPage /></ToolPage>} />
               <Route path="/form-detection" element={<ToolPage><FormDetectionPage /></ToolPage>} />
               <Route path="/classify" element={<ToolPage><ClassifyPage /></ToolPage>} />
-              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/history" element={<ToolPage><HistoryPage /></ToolPage>} />
               <Route path="/key-info" element={<ToolPage><KeyInfoPage /></ToolPage>} />
-              <Route path="/files" element={<FilesPage />} />
+              <Route path="/files" element={<ToolPage><FilesPage /></ToolPage>} />
             </Routes>
           </GlobalKeyboardHandler>
         </BrowserRouter>
