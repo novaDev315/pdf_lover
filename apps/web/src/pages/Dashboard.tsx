@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { AppFooter } from '@/components/layout/AppFooter';
 import {
   Card,
   CardContent,
@@ -509,16 +510,7 @@ export function Dashboard() {
         </section>
       </main>
 
-      <footer className="border-t border-surface-200 px-4 py-6 dark:border-surface-800 sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-7xl flex-col gap-2 text-sm text-surface-500 sm:flex-row sm:items-center sm:justify-between">
-          <p>PDFLover · Privacy-first PDF workspace</p>
-          <div className="flex gap-4">
-            <Link className="hover:text-primary-600" to="/settings">Settings</Link>
-            <Link className="hover:text-primary-600" to="/history">History</Link>
-            <Link className="hover:text-primary-600" to="/files">Library</Link>
-          </div>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 }

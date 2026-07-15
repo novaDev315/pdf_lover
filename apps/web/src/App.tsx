@@ -37,7 +37,17 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { LibraryHydrator } from "@/components/LibraryHydrator";
 import { PwaFileReceiver } from "@/components/PwaFileReceiver";
 import { SettingsEffects } from "@/components/layout/SettingsEffects";
+import { AppFooter } from "@/components/layout/AppFooter";
 import { TooltipProvider } from "@/components/ui/tooltip";
+
+function ToolPage({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="bg-surface-50 dark:bg-surface-950">
+      {children}
+      <AppFooter />
+    </div>
+  );
+}
 
 /**
  * Global keyboard shortcut handler for undo/redo
@@ -115,28 +125,28 @@ function App() {
             {/* Routes */}
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/merge" element={<MergePage />} />
-              <Route path="/split" element={<SplitPage />} />
-              <Route path="/compress" element={<CompressPage />} />
-              <Route path="/convert" element={<ConvertPage />} />
-              <Route path="/security" element={<SecurityPage />} />
-              <Route path="/watermark" element={<WatermarkPage />} />
-              <Route path="/signature" element={<SignaturePage />} />
-              <Route path="/chat" element={<ChatPage />} />
-              <Route path="/editor" element={<EditorPage />} />
+              <Route path="/merge" element={<ToolPage><MergePage /></ToolPage>} />
+              <Route path="/split" element={<ToolPage><SplitPage /></ToolPage>} />
+              <Route path="/compress" element={<ToolPage><CompressPage /></ToolPage>} />
+              <Route path="/convert" element={<ToolPage><ConvertPage /></ToolPage>} />
+              <Route path="/security" element={<ToolPage><SecurityPage /></ToolPage>} />
+              <Route path="/watermark" element={<ToolPage><WatermarkPage /></ToolPage>} />
+              <Route path="/signature" element={<ToolPage><SignaturePage /></ToolPage>} />
+              <Route path="/chat" element={<ToolPage><ChatPage /></ToolPage>} />
+              <Route path="/editor" element={<ToolPage><EditorPage /></ToolPage>} />
               <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/search" element={<SearchReplacePage />} />
-              <Route path="/batch" element={<BatchPage />} />
-              <Route path="/extract-images" element={<ExtractImagesPage />} />
-              <Route path="/extract-tables" element={<ExtractTablesPage />} />
-              <Route path="/page-numbers" element={<PageNumbersPage />} />
-              <Route path="/crop-resize" element={<CropResizePage />} />
-              <Route path="/compare" element={<ComparePage />} />
-              <Route path="/toc" element={<TOCPage />} />
-              <Route path="/form-detection" element={<FormDetectionPage />} />
-              <Route path="/classify" element={<ClassifyPage />} />
+              <Route path="/search" element={<ToolPage><SearchReplacePage /></ToolPage>} />
+              <Route path="/batch" element={<ToolPage><BatchPage /></ToolPage>} />
+              <Route path="/extract-images" element={<ToolPage><ExtractImagesPage /></ToolPage>} />
+              <Route path="/extract-tables" element={<ToolPage><ExtractTablesPage /></ToolPage>} />
+              <Route path="/page-numbers" element={<ToolPage><PageNumbersPage /></ToolPage>} />
+              <Route path="/crop-resize" element={<ToolPage><CropResizePage /></ToolPage>} />
+              <Route path="/compare" element={<ToolPage><ComparePage /></ToolPage>} />
+              <Route path="/toc" element={<ToolPage><TOCPage /></ToolPage>} />
+              <Route path="/form-detection" element={<ToolPage><FormDetectionPage /></ToolPage>} />
+              <Route path="/classify" element={<ToolPage><ClassifyPage /></ToolPage>} />
               <Route path="/history" element={<HistoryPage />} />
-              <Route path="/key-info" element={<KeyInfoPage />} />
+              <Route path="/key-info" element={<ToolPage><KeyInfoPage /></ToolPage>} />
               <Route path="/files" element={<FilesPage />} />
             </Routes>
           </GlobalKeyboardHandler>
