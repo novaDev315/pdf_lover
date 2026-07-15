@@ -95,7 +95,7 @@ function EmptyState({ onUpload }: { onUpload: () => void }) {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
             <FileText className="h-8 w-8 text-primary" />
           </div>
-          <h2 className="mb-2 text-xl font-semibold">Chat with your PDF</h2>
+          <h1 className="mb-2 text-xl font-semibold">Chat with your PDF</h1>
           <p className="mb-6 text-sm text-muted-foreground">
             Upload a PDF document to start asking questions. Your document is
             processed locally - nothing is uploaded to any server.
@@ -117,6 +117,7 @@ function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="flex flex-col items-center gap-4">
+        <h1 className="sr-only">Chat with PDF</h1>
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <p className="text-sm text-muted-foreground">{message}</p>
       </div>
@@ -486,6 +487,9 @@ ${context.contextText}
       <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center">
           <AlertCircle className="h-12 w-12 text-destructive" />
+          <h1 className="text-lg font-semibold text-foreground">
+            Unable to open PDF chat
+          </h1>
           <p className="text-sm text-muted-foreground">{pdfError}</p>
           <Button onClick={() => navigate("/")}>Go Back</Button>
         </div>
@@ -500,6 +504,7 @@ ${context.contextText}
 
   return (
     <div className="flex h-full">
+      <h1 className="sr-only">Chat with PDF</h1>
       {/* Back button */}
       <Button
         variant="ghost"

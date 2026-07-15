@@ -587,9 +587,9 @@ export function EditorPage() {
                 </Button>
                 <div className="flex items-center gap-2">
                   <Heart className="h-6 w-6 text-primary-500" fill="currentColor" />
-                  <span className="text-lg font-bold text-surface-900 dark:text-white">
+                  <h1 className="text-lg font-bold text-surface-900 dark:text-white">
                     PDF Editor
-                  </span>
+                  </h1>
                 </div>
               </div>
             </div>
@@ -641,6 +641,7 @@ export function EditorPage() {
     return (
       <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
+          <h1 className="sr-only">PDF editor</h1>
           <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
           <div className="text-sm text-muted-foreground">Loading PDF... {progress}%</div>
         </div>
@@ -653,7 +654,7 @@ export function EditorPage() {
     return (
       <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-center p-8">
-          <div className="text-destructive text-lg font-medium">Failed to load PDF</div>
+          <h1 className="text-destructive text-lg font-medium">Failed to load PDF</h1>
           <div className="text-muted-foreground">{error}</div>
           <Button onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-4 w-4 mr-2" />
@@ -686,9 +687,12 @@ export function EditorPage() {
               </Button>
               <div className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-primary-500" fill="currentColor" />
-                <span className="font-medium text-surface-900 dark:text-white truncate max-w-48">
+                <h1
+                  className="font-medium text-surface-900 dark:text-white truncate max-w-48"
+                  aria-label={`PDF editor: ${fileName}`}
+                >
                   {fileName}
-                </span>
+                </h1>
                 {hasUnsavedChanges && (
                   <span className="text-xs text-muted-foreground">*</span>
                 )}

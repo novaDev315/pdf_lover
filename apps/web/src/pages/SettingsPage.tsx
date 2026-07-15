@@ -328,10 +328,9 @@ export function SettingsPage() {
   // Scroll to section
   const scrollToSection = (sectionId: string) => {
     setActiveSection(sectionId);
-    const element = sectionRefs.current[sectionId];
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    window.requestAnimationFrame(() => {
+      sectionRefs.current[sectionId]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   // Handle clear all data
@@ -404,8 +403,32 @@ export function SettingsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Sidebar Navigation */}
-          <nav className="lg:w-64 shrink-0">
-            <Card className="sticky top-24">
+          <nav className="shrink-0 lg:w-64" aria-label="Settings sections">
+            <div className="lg:hidden">
+              <label
+                htmlFor="settings-section"
+                className="mb-2 block text-sm font-medium text-foreground"
+              >
+                Show settings for
+              </label>
+              <select
+                id="settings-section"
+                value={activeSection}
+                onChange={(event) => scrollToSection(event.target.value)}
+                className="h-11 w-full rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              >
+                {SETTINGS_SECTIONS.map((section) => (
+                  <option key={section.id} value={section.id}>
+                    {section.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Choose one section at a time to keep this page easy to scan.
+              </p>
+            </div>
+
+            <Card className="sticky top-24 hidden lg:block">
               <CardContent className="p-2">
                 {SETTINGS_SECTIONS.map((section) => (
                   <button
@@ -430,7 +453,11 @@ export function SettingsPage() {
           {/* Settings Content */}
           <div className="flex-1 space-y-8">
             {/* Appearance Section */}
-            <section id="appearance" ref={(el) => { sectionRefs.current['appearance'] = el; }}>
+            <section
+              id="appearance"
+              className={cn('scroll-mt-24', activeSection !== 'appearance' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['appearance'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -507,7 +534,11 @@ export function SettingsPage() {
             </section>
 
             {/* PDF Viewer Section */}
-            <section id="viewer" ref={(el) => { sectionRefs.current['viewer'] = el; }}>
+            <section
+              id="viewer"
+              className={cn('scroll-mt-24', activeSection !== 'viewer' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['viewer'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -596,7 +627,11 @@ export function SettingsPage() {
             </section>
 
             {/* AI Settings Section */}
-            <section id="ai" ref={(el) => { sectionRefs.current['ai'] = el; }}>
+            <section
+              id="ai"
+              className={cn('scroll-mt-24', activeSection !== 'ai' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['ai'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -669,7 +704,11 @@ export function SettingsPage() {
             </section>
 
             {/* Processing Section */}
-            <section id="processing" ref={(el) => { sectionRefs.current['processing'] = el; }}>
+            <section
+              id="processing"
+              className={cn('scroll-mt-24', activeSection !== 'processing' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['processing'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -752,7 +791,11 @@ export function SettingsPage() {
             </section>
 
             {/* Privacy Section */}
-            <section id="privacy" ref={(el) => { sectionRefs.current['privacy'] = el; }}>
+            <section
+              id="privacy"
+              className={cn('scroll-mt-24', activeSection !== 'privacy' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['privacy'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -824,7 +867,11 @@ export function SettingsPage() {
             </section>
 
             {/* Keyboard Shortcuts Section */}
-            <section id="shortcuts" ref={(el) => { sectionRefs.current['shortcuts'] = el; }}>
+            <section
+              id="shortcuts"
+              className={cn('scroll-mt-24', activeSection !== 'shortcuts' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['shortcuts'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -850,7 +897,11 @@ export function SettingsPage() {
             </section>
 
             {/* About Section */}
-            <section id="about" ref={(el) => { sectionRefs.current['about'] = el; }}>
+            <section
+              id="about"
+              className={cn('scroll-mt-24', activeSection !== 'about' && 'hidden lg:block')}
+              ref={(el) => { sectionRefs.current['about'] = el; }}
+            >
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
