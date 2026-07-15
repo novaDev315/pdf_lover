@@ -129,6 +129,75 @@
   --color-primary-950: #fef2f2;
 }
 
+/* Persisted appearance settings */
+html[data-font-size='small'] { font-size: 14px; }
+html[data-font-size='medium'] { font-size: 16px; }
+html[data-font-size='large'] { font-size: 18px; }
+
+html[data-accent='blue'] {
+  --primary: 221.2 83.2% 53.3%; --ring: 221.2 83.2% 53.3%;
+  --color-primary-50: #eff6ff; --color-primary-100: #dbeafe; --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd; --color-primary-400: #60a5fa; --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb; --color-primary-700: #1d4ed8; --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a; --color-primary-950: #172554;
+}
+
+html[data-accent='purple'] {
+  --primary: 262.1 83.3% 57.8%; --ring: 262.1 83.3% 57.8%;
+  --color-primary-50: #faf5ff; --color-primary-100: #f3e8ff; --color-primary-200: #e9d5ff;
+  --color-primary-300: #d8b4fe; --color-primary-400: #c084fc; --color-primary-500: #a855f7;
+  --color-primary-600: #9333ea; --color-primary-700: #7e22ce; --color-primary-800: #6b21a8;
+  --color-primary-900: #581c87; --color-primary-950: #3b0764;
+}
+
+html[data-accent='green'] {
+  --primary: 142.1 76.2% 36.3%; --ring: 142.1 76.2% 36.3%;
+  --color-primary-50: #f0fdf4; --color-primary-100: #dcfce7; --color-primary-200: #bbf7d0;
+  --color-primary-300: #86efac; --color-primary-400: #4ade80; --color-primary-500: #22c55e;
+  --color-primary-600: #16a34a; --color-primary-700: #15803d; --color-primary-800: #166534;
+  --color-primary-900: #14532d; --color-primary-950: #052e16;
+}
+
+html[data-accent='orange'] {
+  --primary: 24.6 95% 53.1%; --ring: 24.6 95% 53.1%;
+  --color-primary-50: #fff7ed; --color-primary-100: #ffedd5; --color-primary-200: #fed7aa;
+  --color-primary-300: #fdba74; --color-primary-400: #fb923c; --color-primary-500: #f97316;
+  --color-primary-600: #ea580c; --color-primary-700: #c2410c; --color-primary-800: #9a3412;
+  --color-primary-900: #7c2d12; --color-primary-950: #431407;
+}
+
+html[data-accent='pink'] {
+  --primary: 330.4 81.2% 60.4%; --ring: 330.4 81.2% 60.4%;
+  --color-primary-50: #fdf2f8; --color-primary-100: #fce7f3; --color-primary-200: #fbcfe8;
+  --color-primary-300: #f9a8d4; --color-primary-400: #f472b6; --color-primary-500: #ec4899;
+  --color-primary-600: #db2777; --color-primary-700: #be185d; --color-primary-800: #9d174d;
+  --color-primary-900: #831843; --color-primary-950: #500724;
+}
+
+html[data-accent='red'] {
+  --primary: 0 72.2% 50.6%; --ring: 0 72.2% 50.6%;
+  --color-primary-50: #fef2f2; --color-primary-100: #fee2e2; --color-primary-200: #fecaca;
+  --color-primary-300: #fca5a5; --color-primary-400: #f87171; --color-primary-500: #ef4444;
+  --color-primary-600: #dc2626; --color-primary-700: #b91c1c; --color-primary-800: #991b1b;
+  --color-primary-900: #7f1d1d; --color-primary-950: #450a0a;
+}
+
+html.dark[data-accent] {
+  --color-primary-50: var(--accent-950); --color-primary-100: var(--accent-900);
+  --color-primary-200: var(--accent-800); --color-primary-300: var(--accent-700);
+  --color-primary-400: var(--accent-600); --color-primary-500: var(--accent-500);
+  --color-primary-600: var(--accent-400); --color-primary-700: var(--accent-300);
+  --color-primary-800: var(--accent-200); --color-primary-900: var(--accent-100);
+  --color-primary-950: var(--accent-50);
+}
+
+html[data-accent='blue'] { --accent-50: #eff6ff; --accent-100: #dbeafe; --accent-200: #bfdbfe; --accent-300: #93c5fd; --accent-400: #60a5fa; --accent-500: #3b82f6; --accent-600: #2563eb; --accent-700: #1d4ed8; --accent-800: #1e40af; --accent-900: #1e3a8a; --accent-950: #172554; }
+html[data-accent='purple'] { --accent-50: #faf5ff; --accent-100: #f3e8ff; --accent-200: #e9d5ff; --accent-300: #d8b4fe; --accent-400: #c084fc; --accent-500: #a855f7; --accent-600: #9333ea; --accent-700: #7e22ce; --accent-800: #6b21a8; --accent-900: #581c87; --accent-950: #3b0764; }
+html[data-accent='green'] { --accent-50: #f0fdf4; --accent-100: #dcfce7; --accent-200: #bbf7d0; --accent-300: #86efac; --accent-400: #4ade80; --accent-500: #22c55e; --accent-600: #16a34a; --accent-700: #15803d; --accent-800: #166534; --accent-900: #14532d; --accent-950: #052e16; }
+html[data-accent='orange'] { --accent-50: #fff7ed; --accent-100: #ffedd5; --accent-200: #fed7aa; --accent-300: #fdba74; --accent-400: #fb923c; --accent-500: #f97316; --accent-600: #ea580c; --accent-700: #c2410c; --accent-800: #9a3412; --accent-900: #7c2d12; --accent-950: #431407; }
+html[data-accent='pink'] { --accent-50: #fdf2f8; --accent-100: #fce7f3; --accent-200: #fbcfe8; --accent-300: #f9a8d4; --accent-400: #f472b6; --accent-500: #ec4899; --accent-600: #db2777; --accent-700: #be185d; --accent-800: #9d174d; --accent-900: #831843; --accent-950: #500724; }
+html[data-accent='red'] { --accent-50: #fef2f2; --accent-100: #fee2e2; --accent-200: #fecaca; --accent-300: #fca5a5; --accent-400: #f87171; --accent-500: #ef4444; --accent-600: #dc2626; --accent-700: #b91c1c; --accent-800: #991b1b; --accent-900: #7f1d1d; --accent-950: #450a0a; }
+
 /* =====================================================
    Base Styles
    ===================================================== */

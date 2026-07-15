@@ -14,6 +14,12 @@ import type {
   QueryResult,
   StorageStats,
   DocumentStatus,
+  PDFMetadata,
+  DocumentBlobRecord,
+  DocumentVersion,
+  DocumentVersionSource,
+  StoredOperationRun,
+  StoredOperationArtifact,
 } from '@pdflover/shared';
 
 /**
@@ -47,7 +53,63 @@ export interface AppSettings {
 /**
  * Database schema version for tracking migrations
  */
-const DB_VERSION = 1;
+const DB_VERSION = 2;
+
+export interface ImportDocumentInput {
+  file: Blob;
+  filename: string;
+  pageCount: number;
+  metadata?: PDFMetadata;
+  thumbnail?: string;
+  folderId?: string;
+  tags?: string[];
+}
+
+export interface LocalOperationResultInput {
+  id: string;
+  operation: string;
+  documentId?: string;
+  completedAt: Date;
+  artifacts: Array<{
+    data: ArrayBuffer;
+    filename: string;
+    mediaType: string;
+  }>;
+}
+
+async function sha256(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToBlob(value: string, mediaType: string): Blob {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mediaType });
+}
+
+function reviveDate(value: unknown, field: string): Date {
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid archive date in ${field}`);
+  return date;
+}
+
+function requireArray(value: unknown, field: string): unknown[] {
+  if (!Array.isArray(value)) throw new Error(`Invalid PDFLover archive: ${field} must be an array`);
+  return value;
+}
 
 /**
  * PDFLover IndexedDB database class
@@ -66,11 +128,19 @@ export class PDFLoverDB extends Dexie {
   settings!: Table<AppSettings, string>;
   /** Folders table for document organization */
   folders!: Table<DocumentFolder, string>;
+  /** Raw document and generated artifact bytes */
+  documentBlobs!: Table<DocumentBlobRecord, string>;
+  /** Immutable document version records */
+  documentVersions!: Table<DocumentVersion, string>;
+  /** Reload-safe local and backend operation history */
+  operationRuns!: Table<StoredOperationRun, string>;
+  /** Generated artifacts linked to operation history */
+  operationArtifacts!: Table<StoredOperationArtifact, string>;
 
   constructor() {
     super('PDFLoverDB');
 
-    this.version(DB_VERSION).stores({
+    this.version(1).stores({
       // Primary key is 'id', with indexes for common queries
       documents: 'id, filename, status, createdAt, updatedAt, lastAccessedAt, folderId, isFavorite, *tags',
       // Conversations indexed by document IDs for efficient lookup
@@ -84,6 +154,29 @@ export class PDFLoverDB extends Dexie {
       // Folders with parent hierarchy support
       folders: 'id, parentId, name, createdAt',
     });
+
+    this.version(DB_VERSION)
+      .stores({
+        documents: 'id, filename, status, createdAt, updatedAt, lastAccessedAt, folderId, isFavorite, currentVersionId, *tags',
+        conversations: 'id, createdAt, updatedAt, *context.documentIds',
+        messages: 'id, conversationId, timestamp, role',
+        embeddings: '[documentId+chunkId], documentId, pageNumber',
+        settings: 'key',
+        folders: 'id, parentId, name, createdAt',
+        documentBlobs: 'id, documentId, sha256, createdAt',
+        documentVersions: 'id, documentId, [documentId+versionNumber], blobId, createdAt',
+        operationRuns: 'id, documentId, operation, status, createdAt, updatedAt',
+        operationArtifacts: 'id, runId, documentId, blobId, createdAt',
+      })
+      .upgrade(async (transaction) => {
+        await transaction.table<StoredDocument, string>('documents').toCollection().modify((doc) => {
+          if (!doc.currentVersionId) {
+            doc.status = 'error';
+            doc.errorMessage =
+              'This legacy record has no stored document bytes. Re-import the original file.';
+          }
+        });
+      });
   }
 
   // ============================================
@@ -96,6 +189,9 @@ export class PDFLoverDB extends Dexie {
    * @returns The saved document ID
    */
   async saveDocument(doc: StoredDocument): Promise<string> {
+    if (!doc.currentVersionId || !doc.originalVersionId) {
+      throw new Error('Document metadata cannot be saved without stored document bytes');
+    }
     const now = new Date();
     const documentToSave: StoredDocument = {
       ...doc,
@@ -105,6 +201,206 @@ export class PDFLoverDB extends Dexie {
 
     await this.documents.put(documentToSave);
     return doc.id;
+  }
+
+  /**
+   * Atomically import document bytes, the initial immutable version, and the
+   * metadata record. No library entry is created if any write fails.
+   */
+  async importDocument(input: ImportDocumentInput): Promise<StoredDocument> {
+    if (input.file.size === 0) throw new Error('Cannot import an empty document');
+    if (input.file.type && input.file.type !== 'application/pdf') {
+      throw new Error('Only application/pdf documents can be imported');
+    }
+
+    const header = new Uint8Array(await input.file.slice(0, 5).arrayBuffer());
+    if (new TextDecoder('ascii').decode(header) !== '%PDF-') {
+      throw new Error('The selected file does not contain a PDF header');
+    }
+
+    const now = new Date();
+    const documentId = generateId();
+    const blobId = generateId();
+    const versionId = generateId();
+    const fileHash = await sha256(input.file);
+    const blob: DocumentBlobRecord = {
+      id: blobId,
+      documentId,
+      data: input.file,
+      size: input.file.size,
+      sha256: fileHash,
+      createdAt: now,
+    };
+    const version: DocumentVersion = {
+      id: versionId,
+      documentId,
+      blobId,
+      versionNumber: 1,
+      source: 'import',
+      label: 'Original import',
+      createdAt: now,
+    };
+    const document: StoredDocument = {
+      id: documentId,
+      filename: input.filename,
+      mimeType: 'application/pdf',
+      fileSize: input.file.size,
+      pageCount: input.pageCount,
+      metadata: input.metadata ?? {},
+      status: 'ready',
+      thumbnail: input.thumbnail,
+      tags: input.tags,
+      folderId: input.folderId,
+      createdAt: now,
+      updatedAt: now,
+      lastAccessedAt: now,
+      fileHash,
+      originalVersionId: versionId,
+      currentVersionId: versionId,
+      syncStatus: 'local-only',
+    };
+
+    await this.transaction(
+      'rw',
+      [this.documents, this.documentBlobs, this.documentVersions],
+      async () => {
+        await this.documentBlobs.add(blob);
+        await this.documentVersions.add(version);
+        await this.documents.add(document);
+      },
+    );
+    return document;
+  }
+
+  /** Load a specific immutable document version, or the current version. */
+  async getDocumentBytes(documentId: string, versionId?: string): Promise<Blob | undefined> {
+    const document = await this.documents.get(documentId);
+    if (!document) return undefined;
+    const targetVersionId = versionId ?? document.currentVersionId;
+    if (!targetVersionId) return undefined;
+    const version = await this.documentVersions.get(targetVersionId);
+    if (!version || version.documentId !== documentId) return undefined;
+    return (await this.documentBlobs.get(version.blobId))?.data;
+  }
+
+  /** Save new bytes as an immutable version and make it current atomically. */
+  async createDocumentVersion(
+    documentId: string,
+    data: Blob,
+    options: { source: DocumentVersionSource; label?: string },
+  ): Promise<DocumentVersion> {
+    if (data.size === 0) throw new Error('Cannot save an empty document version');
+    const document = await this.documents.get(documentId);
+    if (!document) throw new Error('Document not found');
+    const versions = await this.documentVersions
+      .where('documentId')
+      .equals(documentId)
+      .toArray();
+    const now = new Date();
+    const digest = await sha256(data);
+    const blob: DocumentBlobRecord = {
+      id: generateId(),
+      documentId,
+      data,
+      size: data.size,
+      sha256: digest,
+      createdAt: now,
+    };
+    const version: DocumentVersion = {
+      id: generateId(),
+      documentId,
+      blobId: blob.id,
+      versionNumber: Math.max(0, ...versions.map((item) => item.versionNumber)) + 1,
+      source: options.source,
+      label: options.label,
+      parentVersionId: document.currentVersionId,
+      createdAt: now,
+    };
+
+    await this.transaction(
+      'rw',
+      [this.documents, this.documentBlobs, this.documentVersions],
+      async () => {
+        await this.documentBlobs.add(blob);
+        await this.documentVersions.add(version);
+        await this.documents.update(documentId, {
+          currentVersionId: version.id,
+          fileSize: data.size,
+          fileHash: digest,
+          status: 'ready',
+          errorMessage: undefined,
+          updatedAt: now,
+          lastAccessedAt: now,
+        });
+      },
+    );
+    return version;
+  }
+
+  async getDocumentVersions(documentId: string): Promise<DocumentVersion[]> {
+    const versions = await this.documentVersions.where('documentId').equals(documentId).toArray();
+    return versions.sort((a, b) => b.versionNumber - a.versionNumber);
+  }
+
+  /** Persist a completed local operation and every generated artifact atomically. */
+  async saveLocalOperationResult(input: LocalOperationResultInput): Promise<void> {
+    if (input.artifacts.length === 0) throw new Error('Operation has no artifacts to save');
+    const now = input.completedAt;
+    const blobs: DocumentBlobRecord[] = [];
+    const artifacts: StoredOperationArtifact[] = [];
+
+    for (const artifact of input.artifacts) {
+      if (artifact.data.byteLength === 0) throw new Error(`Artifact ${artifact.filename} is empty`);
+      const data = new Blob([artifact.data], { type: artifact.mediaType });
+      const digest = await sha256(data);
+      const blob: DocumentBlobRecord = {
+        id: generateId(),
+        documentId: input.documentId,
+        data,
+        size: data.size,
+        sha256: digest,
+        createdAt: now,
+      };
+      blobs.push(blob);
+      artifacts.push({
+        id: generateId(),
+        runId: input.id,
+        documentId: input.documentId,
+        blobId: blob.id,
+        filename: artifact.filename,
+        mediaType: artifact.mediaType,
+        size: data.size,
+        sha256: digest,
+        createdAt: now,
+      });
+    }
+
+    const run: StoredOperationRun = {
+      id: input.id,
+      documentId: input.documentId,
+      operation: input.operation,
+      engine: 'local',
+      status: 'succeeded',
+      progress: 100,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: now,
+    };
+
+    await this.transaction(
+      'rw',
+      [this.documentBlobs, this.operationRuns, this.operationArtifacts],
+      async () => {
+        await this.operationRuns.put(run);
+        await this.documentBlobs.bulkPut(blobs);
+        await this.operationArtifacts.bulkPut(artifacts);
+      },
+    );
+  }
+
+  async getOperationArtifactData(artifactId: string): Promise<Blob | undefined> {
+    const artifact = await this.operationArtifacts.get(artifactId);
+    return artifact ? (await this.documentBlobs.get(artifact.blobId))?.data : undefined;
   }
 
   /**
@@ -210,12 +506,25 @@ export class PDFLoverDB extends Dexie {
    * @param id - The document ID to delete
    */
   async deleteDocument(id: string): Promise<void> {
-    await this.transaction('rw', [this.documents, this.embeddings, this.conversations, this.messages], async () => {
+    await this.transaction('rw', [
+      this.documents,
+      this.documentBlobs,
+      this.documentVersions,
+      this.operationRuns,
+      this.operationArtifacts,
+      this.embeddings,
+      this.conversations,
+      this.messages,
+    ], async () => {
       // Delete the document
       await this.documents.delete(id);
 
       // Delete associated embeddings
       await this.embeddings.where('documentId').equals(id).delete();
+      await this.documentVersions.where('documentId').equals(id).delete();
+      await this.documentBlobs.where('documentId').equals(id).delete();
+      await this.operationArtifacts.where('documentId').equals(id).delete();
+      await this.operationRuns.where('documentId').equals(id).delete();
 
       // Find and handle conversations that reference this document
       const conversations = await this.conversations
@@ -620,7 +929,18 @@ export class PDFLoverDB extends Dexie {
   async clearAllData(): Promise<void> {
     await this.transaction(
       'rw',
-      [this.documents, this.conversations, this.messages, this.embeddings, this.settings, this.folders],
+      [
+        this.documents,
+        this.documentBlobs,
+        this.documentVersions,
+        this.operationRuns,
+        this.operationArtifacts,
+        this.conversations,
+        this.messages,
+        this.embeddings,
+        this.settings,
+        this.folders,
+      ],
       async () => {
         await this.documents.clear();
         await this.conversations.clear();
@@ -628,6 +948,10 @@ export class PDFLoverDB extends Dexie {
         await this.embeddings.clear();
         await this.settings.clear();
         await this.folders.clear();
+        await this.documentBlobs.clear();
+        await this.documentVersions.clear();
+        await this.operationRuns.clear();
+        await this.operationArtifacts.clear();
       }
     );
   }
@@ -648,11 +972,30 @@ export class PDFLoverDB extends Dexie {
    * @returns JSON string of all data
    */
   async exportData(): Promise<string> {
+    const documentBlobs = await Promise.all(
+      (await this.documentBlobs.toArray()).map(async ({ data, ...record }) => ({
+        ...record,
+        mediaType: data.type || 'application/octet-stream',
+        dataBase64: await blobToBase64(data),
+      })),
+    );
+    const localSettings: Record<string, string> = {};
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key !== null) localSettings[key] = localStorage.getItem(key) ?? '';
+    }
     const data = {
       documents: await this.documents.toArray(),
+      documentBlobs,
+      documentVersions: await this.documentVersions.toArray(),
+      operationRuns: await this.operationRuns.toArray(),
+      operationArtifacts: await this.operationArtifacts.toArray(),
       conversations: await this.conversations.toArray(),
+      messages: await this.messages.toArray(),
+      embeddings: await this.embeddings.toArray(),
       folders: await this.folders.toArray(),
       settings: await this.settings.toArray(),
+      localSettings,
       exportedAt: new Date().toISOString(),
       version: DB_VERSION,
     };
@@ -666,53 +1009,152 @@ export class PDFLoverDB extends Dexie {
    * @param merge - Whether to merge with existing data (default: replace)
    */
   async importData(jsonData: string, merge = false): Promise<void> {
-    const data = JSON.parse(jsonData);
+    const data = JSON.parse(jsonData) as Record<string, unknown>;
+    if (data.version !== DB_VERSION) {
+      throw new Error(`Unsupported PDFLover archive version: ${String(data.version)}`);
+    }
+
+    const documents = requireArray(data.documents, 'documents') as StoredDocument[];
+    const blobRecords = requireArray(data.documentBlobs, 'documentBlobs') as Array<
+      Omit<DocumentBlobRecord, 'data' | 'createdAt'> & {
+        dataBase64: string;
+        mediaType: string;
+        createdAt: string;
+      }
+    >;
+    const documentVersions = requireArray(data.documentVersions, 'documentVersions') as DocumentVersion[];
+    const operationRuns = requireArray(data.operationRuns, 'operationRuns') as StoredOperationRun[];
+    const operationArtifacts = requireArray(data.operationArtifacts, 'operationArtifacts') as StoredOperationArtifact[];
+    const conversations = requireArray(data.conversations, 'conversations') as Conversation[];
+    const messages = requireArray(data.messages, 'messages') as Array<Message & { conversationId: string }>;
+    const embeddings = requireArray(data.embeddings, 'embeddings') as DocumentEmbedding[];
+    const folders = requireArray(data.folders, 'folders') as DocumentFolder[];
+    const settings = requireArray(data.settings, 'settings') as AppSettings[];
+    const localSettings = data.localSettings;
+    if (!localSettings || typeof localSettings !== 'object' || Array.isArray(localSettings)) {
+      throw new Error('Invalid PDFLover archive: localSettings must be an object');
+    }
+
+    const restoredBlobs: DocumentBlobRecord[] = blobRecords.map((record) => {
+      if (typeof record.dataBase64 !== 'string' || typeof record.mediaType !== 'string') {
+        throw new Error('Invalid PDFLover archive: a document blob has no encoded data');
+      }
+      return {
+        id: record.id,
+        documentId: record.documentId,
+        data: base64ToBlob(record.dataBase64, record.mediaType),
+        size: record.size,
+        sha256: record.sha256,
+        createdAt: reviveDate(record.createdAt, 'documentBlobs.createdAt'),
+      };
+    });
+
+    const versionIds = new Set(documentVersions.map((version) => version.id));
+    const blobIds = new Set(restoredBlobs.map((blob) => blob.id));
+    for (const document of documents) {
+      if (!document.currentVersionId || !document.originalVersionId) {
+        throw new Error(`Archive document ${document.id} has no immutable PDF version`);
+      }
+      if (!versionIds.has(document.currentVersionId) || !versionIds.has(document.originalVersionId)) {
+        throw new Error(`Archive document ${document.id} references a missing version`);
+      }
+    }
+    for (const version of documentVersions) {
+      if (!blobIds.has(version.blobId)) {
+        throw new Error(`Archive version ${version.id} references missing PDF bytes`);
+      }
+    }
+    for (const artifact of operationArtifacts) {
+      if (!blobIds.has(artifact.blobId)) {
+        throw new Error(`Archive artifact ${artifact.id} references missing bytes`);
+      }
+    }
+
+    documents.forEach((document) => {
+      document.createdAt = reviveDate(document.createdAt, 'documents.createdAt');
+      document.updatedAt = reviveDate(document.updatedAt, 'documents.updatedAt');
+      document.lastAccessedAt = reviveDate(document.lastAccessedAt, 'documents.lastAccessedAt');
+      if (document.lastSyncedAt) document.lastSyncedAt = reviveDate(document.lastSyncedAt, 'documents.lastSyncedAt');
+    });
+    documentVersions.forEach((version) => {
+      version.createdAt = reviveDate(version.createdAt, 'documentVersions.createdAt');
+    });
+    operationRuns.forEach((run) => {
+      run.createdAt = reviveDate(run.createdAt, 'operationRuns.createdAt');
+      run.updatedAt = reviveDate(run.updatedAt, 'operationRuns.updatedAt');
+      if (run.completedAt) run.completedAt = reviveDate(run.completedAt, 'operationRuns.completedAt');
+    });
+    operationArtifacts.forEach((artifact) => {
+      artifact.createdAt = reviveDate(artifact.createdAt, 'operationArtifacts.createdAt');
+    });
+    conversations.forEach((conversation) => {
+      conversation.createdAt = reviveDate(conversation.createdAt, 'conversations.createdAt');
+      conversation.updatedAt = reviveDate(conversation.updatedAt, 'conversations.updatedAt');
+      conversation.messages.forEach((message) => {
+        message.timestamp = reviveDate(message.timestamp, 'conversations.messages.timestamp');
+      });
+    });
+    messages.forEach((message) => {
+      message.timestamp = reviveDate(message.timestamp, 'messages.timestamp');
+    });
+    embeddings.forEach((embedding) => {
+      embedding.createdAt = reviveDate(embedding.createdAt, 'embeddings.createdAt');
+    });
+    folders.forEach((folder) => {
+      folder.createdAt = reviveDate(folder.createdAt, 'folders.createdAt');
+      folder.updatedAt = reviveDate(folder.updatedAt, 'folders.updatedAt');
+    });
+    settings.forEach((setting) => {
+      setting.updatedAt = reviveDate(setting.updatedAt, 'settings.updatedAt');
+    });
 
     await this.transaction(
       'rw',
-      [this.documents, this.conversations, this.folders, this.settings],
+      [
+        this.documents,
+        this.documentBlobs,
+        this.documentVersions,
+        this.operationRuns,
+        this.operationArtifacts,
+        this.conversations,
+        this.messages,
+        this.embeddings,
+        this.folders,
+        this.settings,
+      ],
       async () => {
         if (!merge) {
-          await this.clearAllData();
+          await Promise.all([
+            this.documents.clear(),
+            this.documentBlobs.clear(),
+            this.documentVersions.clear(),
+            this.operationRuns.clear(),
+            this.operationArtifacts.clear(),
+            this.conversations.clear(),
+            this.messages.clear(),
+            this.embeddings.clear(),
+            this.folders.clear(),
+            this.settings.clear(),
+          ]);
         }
-
-        if (data.documents) {
-          for (const doc of data.documents) {
-            // Parse dates back to Date objects
-            doc.createdAt = new Date(doc.createdAt);
-            doc.updatedAt = new Date(doc.updatedAt);
-            doc.lastAccessedAt = new Date(doc.lastAccessedAt);
-            await this.documents.put(doc);
-          }
-        }
-
-        if (data.conversations) {
-          for (const conv of data.conversations) {
-            conv.createdAt = new Date(conv.createdAt);
-            conv.updatedAt = new Date(conv.updatedAt);
-            for (const msg of conv.messages) {
-              msg.timestamp = new Date(msg.timestamp);
-            }
-            await this.conversations.put(conv);
-          }
-        }
-
-        if (data.folders) {
-          for (const folder of data.folders) {
-            folder.createdAt = new Date(folder.createdAt);
-            folder.updatedAt = new Date(folder.updatedAt);
-            await this.folders.put(folder);
-          }
-        }
-
-        if (data.settings) {
-          for (const setting of data.settings) {
-            setting.updatedAt = new Date(setting.updatedAt);
-            await this.settings.put(setting);
-          }
-        }
+        await this.documentBlobs.bulkPut(restoredBlobs);
+        await this.documentVersions.bulkPut(documentVersions);
+        await this.documents.bulkPut(documents);
+        await this.operationRuns.bulkPut(operationRuns);
+        await this.operationArtifacts.bulkPut(operationArtifacts);
+        await this.conversations.bulkPut(conversations);
+        await this.messages.bulkPut(messages);
+        await this.embeddings.bulkPut(embeddings);
+        await this.folders.bulkPut(folders);
+        await this.settings.bulkPut(settings);
       }
     );
+
+    if (!merge) localStorage.clear();
+    for (const [key, value] of Object.entries(localSettings)) {
+      if (typeof value !== 'string') throw new Error(`Invalid local setting ${key}`);
+      localStorage.setItem(key, value);
+    }
   }
 }
 

@@ -6,8 +6,13 @@
  */
 
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { PDFDocument } from 'pdf-lib';
 import { db } from '@/lib/storage/indexeddb';
+import {
+  arePDFsIdentical as arePDFsIdenticalCore,
+  comparePDFs as comparePDFsCore,
+  compareText as compareTextCore,
+  compareVisual as compareVisualCore,
+} from '@pdflover/pdf-core';
 
 /**
  * Comparison processing state
@@ -232,148 +237,6 @@ function generateDiffReport(result: ComparisonResult): string {
 }
 
 /**
- * Compare two PDFs using pdf-lib
- */
-async function comparePDFsInternal(
-  data1: ArrayBuffer,
-  data2: ArrayBuffer,
-  options: CompareOptions = {}
-): Promise<ComparisonResult> {
-  const startTime = performance.now();
-  const { onProgress } = options;
-
-  onProgress?.({ stage: 'Loading PDFs...', percentage: 10 });
-
-  const doc1 = await PDFDocument.load(data1, { ignoreEncryption: true });
-  const doc2 = await PDFDocument.load(data2, { ignoreEncryption: true });
-
-  onProgress?.({ stage: 'Analyzing structure...', percentage: 30 });
-
-  const pageCount1 = doc1.getPageCount();
-  const pageCount2 = doc2.getPageCount();
-  const maxPages = Math.max(pageCount1, pageCount2);
-
-  const pageComparisons: PageComparison[] = [];
-
-  onProgress?.({ stage: 'Comparing pages...', percentage: 50 });
-
-  for (let i = 0; i < maxPages; i++) {
-    const pageNum = i + 1;
-    const hasPage1 = i < pageCount1;
-    const hasPage2 = i < pageCount2;
-
-    const differences: Difference[] = [];
-
-    if (!hasPage1) {
-      differences.push({
-        type: 'addition',
-        pageNumber: pageNum,
-        location: { x: 0, y: 0, width: 0, height: 0 },
-        oldValue: null,
-        newValue: `Page ${pageNum} added`,
-        description: 'Page only exists in second PDF',
-      });
-    } else if (!hasPage2) {
-      differences.push({
-        type: 'deletion',
-        pageNumber: pageNum,
-        location: { x: 0, y: 0, width: 0, height: 0 },
-        oldValue: `Page ${pageNum} removed`,
-        newValue: null,
-        description: 'Page only exists in first PDF',
-      });
-    }
-
-    let sameDimensions = true;
-    if (hasPage1 && hasPage2) {
-      const page1 = doc1.getPage(i);
-      const page2 = doc2.getPage(i);
-      const size1 = page1.getSize();
-      const size2 = page2.getSize();
-
-      sameDimensions =
-        Math.abs(size1.width - size2.width) < 1 &&
-        Math.abs(size1.height - size2.height) < 1;
-
-      if (!sameDimensions) {
-        differences.push({
-          type: 'layout',
-          pageNumber: pageNum,
-          location: { x: 0, y: 0, width: size1.width, height: size1.height },
-          oldValue: `${Math.round(size1.width)}x${Math.round(size1.height)}`,
-          newValue: `${Math.round(size2.width)}x${Math.round(size2.height)}`,
-          description: 'Page dimensions changed',
-        });
-      }
-    }
-
-    const similarity = differences.length === 0 ? 100 : sameDimensions ? 90 : 50;
-
-    pageComparisons.push({
-      pageNum,
-      differences,
-      similarity,
-      textSimilarity: similarity,
-      sameDimensions,
-    });
-
-    onProgress?.({
-      stage: 'Comparing pages...',
-      percentage: 50 + (i / maxPages) * 40,
-      currentPage: i + 1,
-      totalPages: maxPages,
-    });
-  }
-
-  onProgress?.({ stage: 'Generating summary...', percentage: 95 });
-
-  const pagesChanged = pageComparisons.filter(p => p.differences.length > 0).length;
-  const pagesIdentical = pageComparisons.filter(p => p.differences.length === 0).length;
-
-  const overallSimilarity = pageComparisons.length > 0
-    ? Math.round(
-        pageComparisons.reduce((sum, p) => sum + p.similarity, 0) / pageComparisons.length
-      )
-    : 100;
-
-  const duration = Math.round(performance.now() - startTime);
-
-  onProgress?.({ stage: 'Complete', percentage: 100 });
-
-  return {
-    pages: pageComparisons,
-    summary: {
-      pdf1PageCount: pageCount1,
-      pdf2PageCount: pageCount2,
-      pagesChanged,
-      pagesIdentical,
-      textChanges: 0,
-      textAdditions: 0,
-      textDeletions: 0,
-      textModifications: 0,
-      overallSimilarity,
-      duration,
-    },
-  };
-}
-
-/**
- * Check if two PDFs are byte-identical
- */
-async function arePDFsIdentical(data1: ArrayBuffer, data2: ArrayBuffer): Promise<boolean> {
-  if (data1.byteLength !== data2.byteLength) return false;
-
-  const arr1 = new Uint8Array(data1);
-  const arr2 = new Uint8Array(data2);
-
-  for (let i = 0; i < arr1.length; i++) {
-    if (arr1[i] !== arr2[i]) return false;
-  }
-
-  return true;
-}
-
-/**
  * React hook for PDF comparison operations
  */
 export function usePdfComparison(options: UsePdfComparisonOptions = {}): UsePdfComparisonReturn {
@@ -495,7 +358,7 @@ export function usePdfComparison(options: UsePdfComparisonOptions = {}): UsePdfC
 
       setState('comparing');
 
-      const comparisonResult = await comparePDFsInternal(data1, data2, {
+      const comparisonResult = await comparePDFsCore(data1, data2, {
         compareText: mode === 'text' || mode === 'both',
         compareVisual: mode === 'visual' || mode === 'both',
         visualThreshold,
@@ -542,26 +405,16 @@ export function usePdfComparison(options: UsePdfComparisonOptions = {}): UsePdfC
 
       if (cancelledRef.current) return null;
 
-      // Simplified text comparison
-      const result = await comparePDFsInternal(data1, data2, {
-        compareText: true,
-        compareVisual: false,
-        onProgress: (info) => {
-          if (cancelledRef.current) return;
-          setProgress(info);
-        },
+      const result = await compareTextCore(data1, data2, (info) => {
+        if (cancelledRef.current) return;
+        setProgress(info);
       });
+
+      if (cancelledRef.current) return null;
 
       setState('completed');
       setProgress({ stage: 'Complete', percentage: 100 });
-
-      return {
-        lineDiffs: [],
-        similarity: result.summary.overallSimilarity,
-        additions: result.summary.textAdditions,
-        deletions: result.summary.textDeletions,
-        modifications: result.summary.textModifications,
-      };
+      return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Text comparison failed';
       setState('error');
@@ -587,10 +440,8 @@ export function usePdfComparison(options: UsePdfComparisonOptions = {}): UsePdfC
 
       if (cancelledRef.current) return null;
 
-      const result = await comparePDFsInternal(data1, data2, {
-        compareText: false,
-        compareVisual: true,
-        visualThreshold,
+      const result = await compareVisualCore(data1, data2, {
+        threshold: visualThreshold,
         scale,
         onProgress: (info) => {
           if (cancelledRef.current) return;
@@ -601,13 +452,7 @@ export function usePdfComparison(options: UsePdfComparisonOptions = {}): UsePdfC
       setState('completed');
       setProgress({ stage: 'Complete', percentage: 100 });
 
-      return result.pages.map(page => ({
-        pageNum: page.pageNum,
-        diffImageDataUrl: page.diffImageDataUrl || '',
-        similarity: page.similarity,
-        differentPixels: 0,
-        totalPixels: 0,
-      }));
+      return result;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Visual comparison failed';
       setState('error');
@@ -624,7 +469,7 @@ export function usePdfComparison(options: UsePdfComparisonOptions = {}): UsePdfC
     try {
       const data1 = await getPdfData(pdf1);
       const data2 = await getPdfData(pdf2);
-      return arePDFsIdentical(data1, data2);
+      return arePDFsIdenticalCore(data1, data2);
     } catch {
       return false;
     }

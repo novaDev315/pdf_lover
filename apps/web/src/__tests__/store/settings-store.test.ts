@@ -7,9 +7,7 @@ import { act } from '@testing-library/react';
 import {
   useSettingsStore,
   selectEffectiveTheme,
-  selectHasApiKey,
   selectCurrentModelId,
-  selectCloudEnabled,
 } from '../../store/settings-store';
 
 // Mock localStorage
@@ -118,24 +116,11 @@ describe('useSettingsStore', () => {
       });
     });
 
-    describe('setApiKey', () => {
-      it('should set OpenRouter API key', () => {
-        act(() => {
-          useSettingsStore.getState().setApiKey('sk-test-key-123');
-        });
-
-        expect(useSettingsStore.getState().ai.openRouterApiKey).toBe(
-          'sk-test-key-123'
-        );
-      });
-
-      it('should allow clearing API key', () => {
-        act(() => {
-          useSettingsStore.getState().setApiKey('sk-test-key-123');
-          useSettingsStore.getState().setApiKey(null);
-        });
-
-        expect(useSettingsStore.getState().ai.openRouterApiKey).toBeNull();
+    describe('provider credentials', () => {
+      it('should not expose or persist an OpenRouter API key', () => {
+        const state = useSettingsStore.getState();
+        expect('openRouterApiKey' in state.ai).toBe(false);
+        expect('setApiKey' in state).toBe(false);
       });
     });
 
@@ -169,14 +154,14 @@ describe('useSettingsStore', () => {
     describe('resetAISettings', () => {
       it('should reset AI settings to defaults', () => {
         act(() => {
-          useSettingsStore.getState().setApiKey('sk-test');
           useSettingsStore.getState().setAIProvider('openrouter');
+          useSettingsStore.getState().updateAISettings({ defaultTemperature: 1.2 });
           useSettingsStore.getState().resetAISettings();
         });
 
         const state = useSettingsStore.getState();
         expect(state.ai.provider).toBe('local');
-        expect(state.ai.openRouterApiKey).toBeNull();
+        expect(state.ai.defaultTemperature).toBe(0.7);
       });
     });
   });
@@ -245,34 +230,6 @@ describe('useSettingsStore', () => {
     });
   });
 
-  describe('privacy settings', () => {
-    describe('updatePrivacySettings', () => {
-      it('should update privacy settings', () => {
-        act(() => {
-          useSettingsStore.getState().updatePrivacySettings({
-            enableAnalytics: true,
-            allowCloudSync: true,
-          });
-        });
-
-        const state = useSettingsStore.getState();
-        expect(state.privacy.enableAnalytics).toBe(true);
-        expect(state.privacy.allowCloudSync).toBe(true);
-      });
-
-      it('should default to privacy-preserving settings', () => {
-        act(() => {
-          useSettingsStore.getState().resetAllSettings();
-        });
-
-        const state = useSettingsStore.getState();
-        expect(state.privacy.enableAnalytics).toBe(false);
-        expect(state.privacy.enableCrashReporting).toBe(false);
-        expect(state.privacy.allowCloudSync).toBe(false);
-      });
-    });
-  });
-
   describe('first run', () => {
     describe('completeFirstRun', () => {
       it('should mark first run as complete', () => {
@@ -302,14 +259,14 @@ describe('useSettingsStore', () => {
       act(() => {
         useSettingsStore.getState().setTheme('dark');
         useSettingsStore.getState().setLanguage('de');
-        useSettingsStore.getState().setApiKey('test-key');
+        useSettingsStore.getState().setAIProvider('openrouter');
         useSettingsStore.getState().resetAllSettings();
       });
 
       const state = useSettingsStore.getState();
       expect(state.theme).toBe('system');
       expect(state.language).toBe('en');
-      expect(state.ai.openRouterApiKey).toBeNull();
+      expect(state.ai.provider).toBe('local');
     });
   });
 });
@@ -351,31 +308,6 @@ describe('selectors', () => {
     });
   });
 
-  describe('selectHasApiKey', () => {
-    it('should return false when no API key is set', () => {
-      const state = useSettingsStore.getState();
-      expect(selectHasApiKey(state)).toBe(false);
-    });
-
-    it('should return true when API key is set', () => {
-      act(() => {
-        useSettingsStore.getState().setApiKey('sk-test-key');
-      });
-
-      const state = useSettingsStore.getState();
-      expect(selectHasApiKey(state)).toBe(true);
-    });
-
-    it('should return false for empty string API key', () => {
-      act(() => {
-        useSettingsStore.getState().setApiKey('');
-      });
-
-      const state = useSettingsStore.getState();
-      expect(selectHasApiKey(state)).toBe(false);
-    });
-  });
-
   describe('selectCurrentModelId', () => {
     it('should return local model ID when provider is local', () => {
       act(() => {
@@ -396,21 +328,4 @@ describe('selectors', () => {
     });
   });
 
-  describe('selectCloudEnabled', () => {
-    it('should return false by default', () => {
-      const state = useSettingsStore.getState();
-      expect(selectCloudEnabled(state)).toBe(false);
-    });
-
-    it('should return true when cloud sync is enabled', () => {
-      act(() => {
-        useSettingsStore.getState().updatePrivacySettings({
-          allowCloudSync: true,
-        });
-      });
-
-      const state = useSettingsStore.getState();
-      expect(selectCloudEnabled(state)).toBe(true);
-    });
-  });
 });

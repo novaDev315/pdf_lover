@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import {
   MergePage,
@@ -25,32 +25,38 @@ import {
   ClassifyPage,
   HistoryPage,
   KeyInfoPage,
-} from '@/pages';
+  FilesPage,
+} from "@/pages";
 import {
   InstallPrompt,
   UpdateNotification,
   OfflineIndicator,
-} from '@/components/pwa';
-import { useOperationHistory } from '@/hooks/useOperationHistory';
-import ErrorBoundary from '@/components/ErrorBoundary';
+} from "@/components/pwa";
+import { useOperationHistory } from "@/hooks/useOperationHistory";
+import ErrorBoundary from "@/components/ErrorBoundary";
+import { LibraryHydrator } from "@/components/LibraryHydrator";
+import { PwaFileReceiver } from "@/components/PwaFileReceiver";
+import { SettingsEffects } from "@/components/layout/SettingsEffects";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 /**
  * Global keyboard shortcut handler for undo/redo
  * Wraps the app to provide Ctrl+Z/Y shortcuts
  */
 function GlobalKeyboardHandler({ children }: { children: React.ReactNode }) {
-  const { undoLastOperation, redoLastOperation, canUndo, canRedo } = useOperationHistory({
-    showToasts: true,
-    enableKeyboardShortcuts: false, // We handle shortcuts manually below for better control
-  });
+  const { undoLastOperation, redoLastOperation, canUndo, canRedo } =
+    useOperationHistory({
+      showToasts: true,
+      enableKeyboardShortcuts: false, // We handle shortcuts manually below for better control
+    });
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Skip if user is typing in an input field
       const target = event.target as HTMLElement;
       if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
         target.isContentEditable
       ) {
         return;
@@ -59,7 +65,7 @@ function GlobalKeyboardHandler({ children }: { children: React.ReactNode }) {
       const isCtrlOrCmd = event.ctrlKey || event.metaKey;
 
       // Ctrl+Z for undo
-      if (isCtrlOrCmd && event.key === 'z' && !event.shiftKey) {
+      if (isCtrlOrCmd && event.key === "z" && !event.shiftKey) {
         if (canUndo) {
           event.preventDefault();
           undoLastOperation();
@@ -70,7 +76,7 @@ function GlobalKeyboardHandler({ children }: { children: React.ReactNode }) {
       // Ctrl+Y or Ctrl+Shift+Z for redo
       if (
         isCtrlOrCmd &&
-        (event.key === 'y' || (event.key === 'z' && event.shiftKey))
+        (event.key === "y" || (event.key === "z" && event.shiftKey))
       ) {
         if (canRedo) {
           event.preventDefault();
@@ -80,8 +86,8 @@ function GlobalKeyboardHandler({ children }: { children: React.ReactNode }) {
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [undoLastOperation, redoLastOperation, canUndo, canRedo]);
 
   return <>{children}</>;
@@ -90,42 +96,52 @@ function GlobalKeyboardHandler({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        {/* PWA Components */}
-        <OfflineIndicator variant="toast" position="bottom" showOnlineNotification />
-        <UpdateNotification position="bottom" />
-        <InstallPrompt variant="banner" showDelay={5000} />
+      <SettingsEffects />
+      <TooltipProvider>
+        <BrowserRouter>
+          <LibraryHydrator />
+          <PwaFileReceiver />
+          {/* PWA Components */}
+          <OfflineIndicator
+            variant="toast"
+            position="bottom"
+            showOnlineNotification
+          />
+          <UpdateNotification position="bottom" />
+          <InstallPrompt variant="banner" showDelay={5000} />
 
-        {/* Global Keyboard Handler for Undo/Redo */}
-        <GlobalKeyboardHandler>
-          {/* Routes */}
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/merge" element={<MergePage />} />
-            <Route path="/split" element={<SplitPage />} />
-            <Route path="/compress" element={<CompressPage />} />
-            <Route path="/convert" element={<ConvertPage />} />
-            <Route path="/security" element={<SecurityPage />} />
-            <Route path="/watermark" element={<WatermarkPage />} />
-            <Route path="/signature" element={<SignaturePage />} />
-            <Route path="/chat" element={<ChatPage />} />
-            <Route path="/editor" element={<EditorPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/search" element={<SearchReplacePage />} />
-            <Route path="/batch" element={<BatchPage />} />
-            <Route path="/extract-images" element={<ExtractImagesPage />} />
-            <Route path="/extract-tables" element={<ExtractTablesPage />} />
-            <Route path="/page-numbers" element={<PageNumbersPage />} />
-            <Route path="/crop-resize" element={<CropResizePage />} />
-            <Route path="/compare" element={<ComparePage />} />
-            <Route path="/toc" element={<TOCPage />} />
-            <Route path="/form-detection" element={<FormDetectionPage />} />
-            <Route path="/classify" element={<ClassifyPage />} />
-            <Route path="/history" element={<HistoryPage />} />
-            <Route path="/key-info" element={<KeyInfoPage />} />
-          </Routes>
-        </GlobalKeyboardHandler>
-      </BrowserRouter>
+          {/* Global Keyboard Handler for Undo/Redo */}
+          <GlobalKeyboardHandler>
+            {/* Routes */}
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/merge" element={<MergePage />} />
+              <Route path="/split" element={<SplitPage />} />
+              <Route path="/compress" element={<CompressPage />} />
+              <Route path="/convert" element={<ConvertPage />} />
+              <Route path="/security" element={<SecurityPage />} />
+              <Route path="/watermark" element={<WatermarkPage />} />
+              <Route path="/signature" element={<SignaturePage />} />
+              <Route path="/chat" element={<ChatPage />} />
+              <Route path="/editor" element={<EditorPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/search" element={<SearchReplacePage />} />
+              <Route path="/batch" element={<BatchPage />} />
+              <Route path="/extract-images" element={<ExtractImagesPage />} />
+              <Route path="/extract-tables" element={<ExtractTablesPage />} />
+              <Route path="/page-numbers" element={<PageNumbersPage />} />
+              <Route path="/crop-resize" element={<CropResizePage />} />
+              <Route path="/compare" element={<ComparePage />} />
+              <Route path="/toc" element={<TOCPage />} />
+              <Route path="/form-detection" element={<FormDetectionPage />} />
+              <Route path="/classify" element={<ClassifyPage />} />
+              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/key-info" element={<KeyInfoPage />} />
+              <Route path="/files" element={<FilesPage />} />
+            </Routes>
+          </GlobalKeyboardHandler>
+        </BrowserRouter>
+      </TooltipProvider>
     </ErrorBoundary>
   );
 }

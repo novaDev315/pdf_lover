@@ -4,6 +4,7 @@
 
 import * as React from 'react'
 import { Link } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import {
   Heart,
   Settings,
@@ -37,6 +38,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useFileStore, selectFilteredFiles } from '@/store/file-store'
 import { formatFileSize, truncateFilename } from '@/lib/utils'
+import { db } from '@/lib/storage'
 
 /**
  * Tool card configuration
@@ -231,8 +233,20 @@ function RecentFileItem({ file, onToggleFavorite, onDelete }: RecentFileItemProp
  * - Privacy-first messaging
  */
 export function Dashboard() {
-  const files = useFileStore(selectFilteredFiles)
+  const files = useFileStore(useShallow(selectFilteredFiles))
   const { toggleFavorite, removeFile } = useFileStore()
+
+  const handleToggleFavorite = React.useCallback(async (id: string) => {
+    const file = useFileStore.getState().files.find((candidate) => candidate.id === id)
+    if (!file) return
+    await db.updateDocument(id, { isFavorite: !file.isFavorite })
+    toggleFavorite(id)
+  }, [toggleFavorite])
+
+  const handleDelete = React.useCallback(async (id: string) => {
+    await db.deleteDocument(id)
+    removeFile(id)
+  }, [removeFile])
 
   // Get recent files (last 5)
   const recentFiles = React.useMemo(() => {
@@ -259,6 +273,12 @@ export function Dashboard() {
               </span>
             </div>
             <nav className="flex items-center gap-2">
+              <Button variant="ghost" asChild>
+                <Link to="/files">
+                  <FolderOpen className="h-4 w-4 mr-2" />
+                  Library
+                </Link>
+              </Button>
               <Button variant="ghost" size="icon" asChild>
                 <Link to="/settings">
                   <Settings className="h-5 w-5" />
@@ -277,14 +297,14 @@ export function Dashboard() {
             Welcome to PDFLover
           </h1>
           <p className="text-surface-600 dark:text-surface-400">
-            Your privacy-first PDF processing tool. All files are processed locally in your browser.
+            Your privacy-first PDF workspace. Browser-safe tools stay local; server tools ask before upload.
           </p>
         </div>
 
         {/* Privacy Badge */}
         <div className="mb-8 inline-flex items-center gap-2 px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-full text-sm font-medium">
           <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          100% Local Processing - Your files never leave your device
+          Local by default - server processing requires explicit consent
         </div>
 
         {/* Tools Grid */}
@@ -330,8 +350,8 @@ export function Dashboard() {
                     <RecentFileItem
                       key={file.id}
                       file={file}
-                      onToggleFavorite={toggleFavorite}
-                      onDelete={removeFile}
+                    onToggleFavorite={(id) => void handleToggleFavorite(id)}
+                    onDelete={(id) => void handleDelete(id)}
                     />
                   ))}
                 </div>
@@ -371,8 +391,8 @@ export function Dashboard() {
                     <RecentFileItem
                       key={file.id}
                       file={file}
-                      onToggleFavorite={toggleFavorite}
-                      onDelete={removeFile}
+                    onToggleFavorite={(id) => void handleToggleFavorite(id)}
+                    onDelete={(id) => void handleDelete(id)}
                     />
                   ))}
                 </div>
@@ -407,7 +427,7 @@ export function Dashboard() {
                 Privacy First
               </h3>
               <p className="text-sm text-surface-600 dark:text-surface-400">
-                Your files stay on your device. No uploads, no tracking, no data collection.
+                Browser-native tools stay on your device. Server-required tools explain the upload and use temporary jobs. No analytics tracking.
               </p>
             </div>
             <div className="text-center">
@@ -420,7 +440,7 @@ export function Dashboard() {
                 Lightning Fast
               </h3>
               <p className="text-sm text-surface-600 dark:text-surface-400">
-                No upload wait times. Process PDFs instantly using modern browser APIs.
+                Local tools avoid upload waits; bounded server jobs handle operations browsers cannot perform safely.
               </p>
             </div>
             <div className="text-center">
@@ -433,7 +453,7 @@ export function Dashboard() {
                 Works Offline
               </h3>
               <p className="text-sm text-surface-600 dark:text-surface-400">
-                Once loaded, PDFLover works without internet. Perfect for on-the-go.
+                The app shell and local tools work offline. Backend operations report clearly when a connection is required.
               </p>
             </div>
           </div>

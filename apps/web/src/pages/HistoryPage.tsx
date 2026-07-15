@@ -276,6 +276,7 @@ export function HistoryPage() {
     historyCount,
     undoLastOperation,
     redoLastOperation,
+    restoreHistoryEntry,
     clearHistory,
   } = useOperationHistory({
     showToasts: true,
@@ -388,10 +389,10 @@ export function HistoryPage() {
   }, []);
 
   const handleRevert = React.useCallback(
-    async (_entry: HistoryEntry) => {
-      await undoLastOperation();
+    async (entry: HistoryEntry) => {
+      await restoreHistoryEntry(entry);
     },
-    [undoLastOperation]
+    [restoreHistoryEntry]
   );
 
   return (

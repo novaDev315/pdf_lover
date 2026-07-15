@@ -68,6 +68,8 @@ export interface FileState {
  * File store actions interface
  */
 export interface FileActions {
+  /** Replace in-memory library state with durable IndexedDB state */
+  hydrateLibrary: (files: StoredDocument[], folders: DocumentFolder[]) => void;
   /** Add a file to the store */
   addFile: (file: StoredDocument) => void;
   /** Add multiple files to the store */
@@ -150,6 +152,18 @@ const initialState: FileState = {
 export const useFileStore = create<FileStore>()(
   immer((set, get) => ({
     ...initialState,
+
+    hydrateLibrary: (files, folders) => {
+      set((state) => {
+        state.files = files;
+        state.folders = folders;
+        state.selectedFileIds = state.selectedFileIds.filter((id) =>
+          files.some((file) => file.id === id)
+        );
+        state.isLoading = false;
+        state.error = null;
+      });
+    },
 
     addFile: (file: StoredDocument) => {
       set((state) => {

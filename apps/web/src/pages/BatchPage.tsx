@@ -5,6 +5,7 @@
 
 import * as React from 'react';
 import { Link } from 'react-router-dom';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DndContext,
   closestCenter,
@@ -69,6 +70,7 @@ import {
   type SplitOptions,
   type SecurityOptions,
   type ConvertOptions,
+  type OCROptions,
   type BatchFileInfo,
 } from '@/store/batch-store';
 
@@ -243,7 +245,7 @@ function OperationOptions({
                   'high',
                   'maximum',
                 ];
-                onChange({ ...compressOptions, level: levels[value] ?? 'medium' });
+                onChange({ ...compressOptions, level: levels[value] ?? 'medium', serverConsent: false });
               }}
               min={0}
               max={3}
@@ -255,6 +257,17 @@ function OperationOptions({
               <span>High</span>
               <span>Max</span>
             </div>
+            {compressOptions.level === 'maximum' && (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+                <input
+                  type="checkbox"
+                  checked={compressOptions.serverConsent === true}
+                  onChange={(event) => onChange({ ...compressOptions, serverConsent: event.target.checked })}
+                  className="mt-0.5 rounded"
+                />
+                <span>Upload these PDFs to the temporary backend for raster recompression. Inputs are deleted after processing; outputs are deleted after download or TTL.</span>
+              </label>
+            )}
           </div>
         </div>
       );
@@ -360,14 +373,25 @@ function OperationOptions({
       return (
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Password</label>
+            <label className="text-sm font-medium">User Password (optional)</label>
             <Input
               type="password"
-              value={securityOptions.password ?? ''}
+              value={securityOptions.userPassword ?? ''}
               onChange={(e) =>
-                onChange({ ...securityOptions, password: e.target.value })
+                onChange({ ...securityOptions, userPassword: e.target.value })
               }
-              placeholder="Enter password"
+              placeholder="Password required to open"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Owner Password (required)</label>
+            <Input
+              type="password"
+              value={securityOptions.ownerPassword ?? ''}
+              onChange={(e) =>
+                onChange({ ...securityOptions, ownerPassword: e.target.value })
+              }
+              placeholder="Password required to change protection"
             />
           </div>
           <div className="space-y-2">
@@ -407,12 +431,12 @@ function OperationOptions({
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Output Format</label>
-            <div className="grid grid-cols-2 gap-2">
-              {(['png', 'jpg'] as const).map((format) => (
+            <div className="grid grid-cols-3 gap-2">
+              {(['png', 'jpg', 'webp', 'svg', 'txt', 'html', 'docx', 'xlsx', 'pptx'] as const).map((format) => (
                 <button
                   key={format}
                   type="button"
-                  onClick={() => onChange({ ...convertOptions, format })}
+                  onClick={() => onChange({ ...convertOptions, format, serverConsent: false })}
                   className={cn(
                     'px-3 py-2 text-sm rounded-lg border transition-colors uppercase',
                     convertOptions.format === format
@@ -424,7 +448,79 @@ function OperationOptions({
                 </button>
               ))}
             </div>
+            {['docx', 'xlsx', 'pptx'].includes(convertOptions.format) && (
+              <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+                <input
+                  type="checkbox"
+                  checked={convertOptions.serverConsent === true}
+                  onChange={(event) => onChange({ ...convertOptions, serverConsent: event.target.checked })}
+                  className="mt-0.5 rounded"
+                />
+                <span>Upload these PDFs to the temporary backend for best-effort Office conversion. Inputs are deleted after processing; outputs are deleted after download or TTL.</span>
+              </label>
+            )}
           </div>
+        </div>
+      );
+    }
+
+    case 'ocr': {
+      const ocrOptions = options as OCROptions;
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium" htmlFor="ocr-language">OCR language</label>
+            <select
+              id="ocr-language"
+              value={ocrOptions.language}
+              onChange={(event) => onChange({ ...ocrOptions, language: event.target.value })}
+              className="w-full rounded-lg border border-surface-300 bg-white px-3 py-2 text-sm dark:border-surface-700 dark:bg-surface-900"
+            >
+              {[
+                ['eng', 'English'], ['spa', 'Spanish'], ['fra', 'French'], ['deu', 'German'],
+                ['ita', 'Italian'], ['por', 'Portuguese'], ['nld', 'Dutch'], ['pol', 'Polish'],
+                ['rus', 'Russian'], ['jpn', 'Japanese'], ['chi_sim', 'Chinese (Simplified)'],
+                ['chi_tra', 'Chinese (Traditional)'], ['kor', 'Korean'], ['ara', 'Arabic'], ['hin', 'Hindi'],
+              ].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={ocrOptions.enhanceScans}
+              onChange={(event) => onChange({ ...ocrOptions, enhanceScans: event.target.checked })}
+              className="rounded"
+            />
+            Enhance scan contrast before recognition
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['local', 'server'] as const).map((engine) => (
+              <button
+                key={engine}
+                type="button"
+                onClick={() => onChange({ ...ocrOptions, engine, serverConsent: false })}
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-sm capitalize',
+                  ocrOptions.engine === engine
+                    ? 'border-primary-500 bg-primary-50 text-primary-700 dark:bg-primary-950 dark:text-primary-300'
+                    : 'border-surface-200 dark:border-surface-700',
+                )}
+              >
+                {engine} OCR
+              </button>
+            ))}
+          </div>
+          {ocrOptions.engine === 'server' && (
+            <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+              <input
+                type="checkbox"
+                checked={ocrOptions.serverConsent === true}
+                onChange={(event) => onChange({ ...ocrOptions, serverConsent: event.target.checked })}
+                className="mt-0.5 rounded"
+              />
+              <span>Upload these PDFs to the temporary backend for Tesseract OCR. Inputs are deleted after processing; outputs are deleted after download or TTL.</span>
+            </label>
+          )}
         </div>
       );
     }
@@ -462,6 +558,8 @@ function getDefaultOptions(type: BatchOperationType): BatchOperationOptions {
       } as SecurityOptions;
     case 'convert':
       return { format: 'png', quality: 90 } as ConvertOptions;
+    case 'ocr':
+      return { language: 'eng', enhanceScans: false, engine: 'local' } as OCROptions;
     default:
       return {};
   }
@@ -479,7 +577,7 @@ export function BatchPage() {
   const [showPanel, setShowPanel] = React.useState(false);
 
   const { toast } = useToast();
-  const stats = useBatchStore(selectQueueStats);
+  const stats = useBatchStore(useShallow(selectQueueStats));
   const { addToQueue, startQueue } = useBatchStore();
 
   // Initialize batch processor
@@ -562,6 +660,26 @@ export function BatchPage() {
       toast({
         title: 'No files selected',
         description: 'Please add at least one PDF file',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (selectedType === 'security' && !(options as SecurityOptions).ownerPassword) {
+      toast({
+        title: 'Owner password required',
+        description: 'Set a distinct owner password before adding encryption to the queue',
+        variant: 'destructive',
+      });
+      return;
+    }
+    const requiresServerConsent =
+      (selectedType === 'compress' && (options as CompressOptions).level === 'maximum') ||
+      (selectedType === 'convert' && ['docx', 'xlsx', 'pptx'].includes((options as ConvertOptions).format)) ||
+      (selectedType === 'ocr' && (options as OCROptions).engine === 'server');
+    if (requiresServerConsent && !('serverConsent' in options && options.serverConsent === true)) {
+      toast({
+        title: 'Upload consent required',
+        description: 'Confirm temporary backend processing before adding this operation to the queue',
         variant: 'destructive',
       });
       return;

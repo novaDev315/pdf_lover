@@ -12,6 +12,7 @@ import {
   clearDocumentIndex,
   type IndexingProgress,
   type RAGContext,
+  type RAGQueryResult,
   type PDFDocument,
 } from '@/lib/ai/rag'
 

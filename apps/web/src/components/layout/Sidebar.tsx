@@ -194,10 +194,10 @@ export function Sidebar({
             <div className="border-t p-4">
               <div className="rounded-lg bg-green-50 p-3 dark:bg-green-950">
                 <p className="text-xs text-green-700 dark:text-green-300">
-                  <strong>100% Private</strong>
+                  <strong>Local by default</strong>
                   <br />
-                  All processing happens locally in your browser. Your files
-                  never leave your device.
+                  Browser tools stay on-device. Server-required tools ask for
+                  consent and use temporary jobs.
                 </p>
               </div>
             </div>

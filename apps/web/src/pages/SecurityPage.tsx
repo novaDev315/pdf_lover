@@ -52,7 +52,7 @@ export function SecurityPage() {
           <p className="text-surface-600 dark:text-surface-400">
             Encrypt your PDF with password protection or remove existing passwords.
             Set permissions to control printing, copying, and editing.
-            All processing happens locally in your browser.
+            Encryption and password removal use an explicit temporary backend job.
           </p>
         </div>
 
@@ -78,7 +78,7 @@ export function SecurityPage() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary-500">-</span>
-              Your files never leave your device - all encryption is done locally in your browser.
+              Encryption uploads only after you start the operation; temporary inputs are deleted after processing and outputs after download or TTL.
             </li>
           </ul>
         </div>

@@ -236,6 +236,12 @@ export type Annotation =
   | CheckboxAnnotation
   | RedactionAnnotation;
 
+type NewAnnotation = Annotation extends infer Candidate
+  ? Candidate extends Annotation
+    ? Omit<Candidate, 'id' | 'createdAt' | 'updatedAt'>
+    : never
+  : never;
+
 /**
  * History entry for undo/redo
  */
@@ -309,7 +315,7 @@ export interface AnnotationState {
  */
 export interface AnnotationActions {
   /** Add a new annotation */
-  addAnnotation: (annotation: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt'>) => string;
+  addAnnotation: (annotation: NewAnnotation) => string;
   /** Update an existing annotation */
   updateAnnotation: (id: string, updates: Partial<Annotation>) => void;
   /** Remove an annotation */
@@ -690,7 +696,7 @@ export const useAnnotationStore = create<AnnotationStore>()(
       // Remove id, createdAt, updatedAt as they'll be regenerated
       const { id: _, createdAt, updatedAt, ...annotationData } = duplicated;
 
-      return get().addAnnotation(annotationData as Omit<Annotation, 'id' | 'createdAt' | 'updatedAt'>);
+      return get().addAnnotation(annotationData as NewAnnotation);
     },
 
     moveAnnotationToPage: (id, pageNum) => {

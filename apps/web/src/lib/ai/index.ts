@@ -25,10 +25,6 @@ export type {
 export {
   sendChatCompletion,
   streamChatCompletion,
-  validateApiKey,
-  fetchAvailableModels,
-  estimateCost,
-  OPENROUTER_MODELS,
 } from './openrouter'
 
 // Embeddings & RAG

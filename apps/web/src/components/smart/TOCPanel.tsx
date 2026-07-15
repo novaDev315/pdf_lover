@@ -9,7 +9,8 @@
  * - Generate and insert TOC
  */
 
-import * as React from 'react'
+import * as React from "react";
+import * as pdfjsLib from "pdfjs-dist";
 import {
   DndContext,
   closestCenter,
@@ -18,15 +19,15 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-} from '@dnd-kit/core'
+} from "@dnd-kit/core";
 import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   List,
   Plus,
@@ -42,22 +43,28 @@ import {
   X,
   FileText,
   Settings2,
-} from 'lucide-react'
+} from "lucide-react";
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Progress } from '@/components/ui/progress'
-import { Slider } from '@/components/ui/slider'
-import { FileDropzone } from '@/components/file-manager/FileDropzone'
-import { useToast } from '@/hooks/use-toast'
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
+import { Slider } from "@/components/ui/slider";
+import { FileDropzone } from "@/components/file-manager/FileDropzone";
+import { useToast } from "@/hooks/use-toast";
 import {
   cn,
   formatFileSize,
   generateId,
   downloadBlob,
   arrayBufferToBlob,
-} from '@/lib/utils'
+} from "@/lib/utils";
 import {
   generateTOC,
   insertTOC,
@@ -65,27 +72,32 @@ import {
   type TOCEntry,
   type HeadingStyle,
   type InsertTOCOptions,
-} from '@pdflover/pdf-core'
-import type { ProgressInfo } from '@pdflover/shared'
+} from "@pdflover/pdf-core";
+import type { ProgressInfo } from "@pdflover/shared";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
+).toString();
 
 /**
  * Internal TOC entry with editing state
  */
 interface EditableTOCEntry extends TOCEntry {
-  isEditing?: boolean
+  isEditing?: boolean;
 }
 
 /**
  * Props for sortable TOC item
  */
 interface SortableTOCItemProps {
-  entry: EditableTOCEntry
-  onRemove: (id: string) => void
-  onEdit: (id: string, newTitle: string) => void
-  onLevelChange: (id: string, delta: number) => void
-  onStartEdit: (id: string) => void
-  onCancelEdit: (id: string) => void
-  maxLevel: number
+  entry: EditableTOCEntry;
+  onRemove: (id: string) => void;
+  onEdit: (id: string, newTitle: string) => void;
+  onLevelChange: (id: string, delta: number) => void;
+  onStartEdit: (id: string) => void;
+  onCancelEdit: (id: string) => void;
+  maxLevel: number;
 }
 
 /**
@@ -100,8 +112,8 @@ function SortableTOCItem({
   onCancelEdit,
   maxLevel,
 }: SortableTOCItemProps) {
-  const [editValue, setEditValue] = React.useState(entry.title)
-  const inputRef = React.useRef<HTMLInputElement>(null)
+  const [editValue, setEditValue] = React.useState(entry.title);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
   const {
     attributes,
@@ -110,46 +122,46 @@ function SortableTOCItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: entry.id })
+  } = useSortable({ id: entry.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-  }
+  };
 
   React.useEffect(() => {
     if (entry.isEditing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
+      inputRef.current.focus();
+      inputRef.current.select();
     }
-  }, [entry.isEditing])
+  }, [entry.isEditing]);
 
   const handleSaveEdit = () => {
     if (editValue.trim()) {
-      onEdit(entry.id, editValue.trim())
+      onEdit(entry.id, editValue.trim());
     } else {
-      onCancelEdit(entry.id)
+      onCancelEdit(entry.id);
     }
-  }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSaveEdit()
-    } else if (e.key === 'Escape') {
-      setEditValue(entry.title)
-      onCancelEdit(entry.id)
+    if (e.key === "Enter") {
+      handleSaveEdit();
+    } else if (e.key === "Escape") {
+      setEditValue(entry.title);
+      onCancelEdit(entry.id);
     }
-  }
+  };
 
-  const indentWidth = (entry.level - 1) * 20
+  const indentWidth = (entry.level - 1) * 20;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
-        'flex items-center gap-2 p-2 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700',
-        isDragging && 'shadow-lg opacity-90 z-10'
+        "flex items-center gap-2 p-2 bg-white dark:bg-surface-800 rounded-lg border border-surface-200 dark:border-surface-700",
+        isDragging && "shadow-lg opacity-90 z-10",
       )}
     >
       {/* Drag handle */}
@@ -172,10 +184,13 @@ function SortableTOCItem({
       {/* Level badge */}
       <span
         className={cn(
-          'flex-shrink-0 w-6 h-6 rounded text-xs font-medium flex items-center justify-center',
-          entry.level === 1 && 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300',
-          entry.level === 2 && 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-          entry.level >= 3 && 'bg-surface-100 text-surface-600 dark:bg-surface-700 dark:text-surface-300'
+          "flex-shrink-0 w-6 h-6 rounded text-xs font-medium flex items-center justify-center",
+          entry.level === 1 &&
+            "bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300",
+          entry.level === 2 &&
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+          entry.level >= 3 &&
+            "bg-surface-100 text-surface-600 dark:bg-surface-700 dark:text-surface-300",
         )}
       >
         H{entry.level}
@@ -201,8 +216,8 @@ function SortableTOCItem({
           <button
             type="button"
             onClick={() => {
-              setEditValue(entry.title)
-              onCancelEdit(entry.id)
+              setEditValue(entry.title);
+              onCancelEdit(entry.id);
             }}
             className="p-1 text-red-500 hover:text-red-600"
           >
@@ -231,8 +246,8 @@ function SortableTOCItem({
           onClick={() => onLevelChange(entry.id, -1)}
           disabled={entry.level <= 1}
           className={cn(
-            'p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700',
-            entry.level <= 1 && 'opacity-30 cursor-not-allowed'
+            "p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700",
+            entry.level <= 1 && "opacity-30 cursor-not-allowed",
           )}
           title="Decrease level (promote)"
         >
@@ -243,8 +258,8 @@ function SortableTOCItem({
           onClick={() => onLevelChange(entry.id, 1)}
           disabled={entry.level >= maxLevel}
           className={cn(
-            'p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700',
-            entry.level >= maxLevel && 'opacity-30 cursor-not-allowed'
+            "p-1 rounded hover:bg-surface-100 dark:hover:bg-surface-700",
+            entry.level >= maxLevel && "opacity-30 cursor-not-allowed",
           )}
           title="Increase level (demote)"
         >
@@ -274,7 +289,7 @@ function SortableTOCItem({
         <Trash2 className="h-3 w-3" />
       </button>
     </div>
-  )
+  );
 }
 
 /**
@@ -282,37 +297,41 @@ function SortableTOCItem({
  */
 export interface TOCPanelProps {
   /** Additional CSS classes */
-  className?: string
+  className?: string;
   /** Callback when TOC is generated */
-  onTOCGenerated?: (entries: TOCEntry[]) => void
+  onTOCGenerated?: (entries: TOCEntry[]) => void;
   /** Callback when PDF with TOC is ready */
-  onPDFReady?: (data: ArrayBuffer, entries: TOCEntry[]) => void
+  onPDFReady?: (data: ArrayBuffer, entries: TOCEntry[]) => void;
 }
 
 /**
  * TOC Panel component for generating and editing Table of Contents
  */
-export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProps) {
-  const [file, setFile] = React.useState<File | null>(null)
-  const [pdfData, setPdfData] = React.useState<ArrayBuffer | null>(null)
-  const [entries, setEntries] = React.useState<EditableTOCEntry[]>([])
-  const [headingStyles, setHeadingStyles] = React.useState<HeadingStyle[]>([])
-  const [isAnalyzing, setIsAnalyzing] = React.useState(false)
-  const [isGenerating, setIsGenerating] = React.useState(false)
-  const [progress, setProgress] = React.useState(0)
-  const [progressStage, setProgressStage] = React.useState('')
-  const [showOptions, setShowOptions] = React.useState(false)
-  const { toast } = useToast()
+export function TOCPanel({
+  className,
+  onTOCGenerated,
+  onPDFReady,
+}: TOCPanelProps) {
+  const [file, setFile] = React.useState<File | null>(null);
+  const [pdfData, setPdfData] = React.useState<ArrayBuffer | null>(null);
+  const [entries, setEntries] = React.useState<EditableTOCEntry[]>([]);
+  const [headingStyles, setHeadingStyles] = React.useState<HeadingStyle[]>([]);
+  const [isAnalyzing, setIsAnalyzing] = React.useState(false);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  const [progressStage, setProgressStage] = React.useState("");
+  const [showOptions, setShowOptions] = React.useState(false);
+  const { toast } = useToast();
 
   // TOC generation options
-  const [minFontSize, setMinFontSize] = React.useState(14)
-  const [maxLevels, setMaxLevels] = React.useState(3)
+  const [minFontSize, setMinFontSize] = React.useState(14);
+  const [maxLevels, setMaxLevels] = React.useState(3);
 
   // TOC insertion options
-  const [tocTitle, setTocTitle] = React.useState('Table of Contents')
-  const [includePageNumbers, setIncludePageNumbers] = React.useState(true)
-  const [includeLinks, setIncludeLinks] = React.useState(true)
-  const [showDottedLeaders, setShowDottedLeaders] = React.useState(true)
+  const [tocTitle, setTocTitle] = React.useState("Table of Contents");
+  const [includePageNumbers, setIncludePageNumbers] = React.useState(true);
+  const [includeLinks, setIncludeLinks] = React.useState(true);
+  const [showDottedLeaders, setShowDottedLeaders] = React.useState(true);
 
   // DnD sensors
   const sensors = useSensors(
@@ -323,46 +342,49 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
+    }),
+  );
 
   /**
    * Handle progress updates
    */
   const handleProgress = React.useCallback((info: ProgressInfo) => {
-    setProgress(info.percentage)
+    setProgress(info.percentage);
     if (info.stage) {
-      setProgressStage(info.stage)
+      setProgressStage(info.stage);
     }
-  }, [])
+  }, []);
 
   /**
    * Handle file selection
    */
-  const handleFilesAccepted = React.useCallback(async (acceptedFiles: File[]) => {
-    const selectedFile = acceptedFiles[0]
-    if (!selectedFile) return
+  const handleFilesAccepted = React.useCallback(
+    async (acceptedFiles: File[]) => {
+      const selectedFile = acceptedFiles[0];
+      if (!selectedFile) return;
 
-    setFile(selectedFile)
-    setEntries([])
-    setHeadingStyles([])
+      setFile(selectedFile);
+      setEntries([]);
+      setHeadingStyles([]);
 
-    try {
-      const buffer = await selectedFile.arrayBuffer()
-      setPdfData(buffer)
+      try {
+        const buffer = await selectedFile.arrayBuffer();
+        setPdfData(buffer);
 
-      toast({
-        title: 'PDF loaded',
-        description: `${selectedFile.name} (${formatFileSize(selectedFile.size)})`,
-      })
-    } catch (error) {
-      toast({
-        title: 'Failed to load PDF',
-        description: 'Please try a different file',
-        variant: 'destructive',
-      })
-    }
-  }, [toast])
+        toast({
+          title: "PDF loaded",
+          description: `${selectedFile.name} (${formatFileSize(selectedFile.size)})`,
+        });
+      } catch (error) {
+        toast({
+          title: "Failed to load PDF",
+          description: "Please try a different file",
+          variant: "destructive",
+        });
+      }
+    },
+    [toast],
+  );
 
   /**
    * Auto-detect headings in the PDF
@@ -370,63 +392,65 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
   const handleDetectHeadings = React.useCallback(async () => {
     if (!pdfData) {
       toast({
-        title: 'No file loaded',
-        description: 'Please upload a PDF file first',
-        variant: 'destructive',
-      })
-      return
+        title: "No file loaded",
+        description: "Please upload a PDF file first",
+        variant: "destructive",
+      });
+      return;
     }
 
-    setIsAnalyzing(true)
-    setProgress(0)
-    setProgressStage('Analyzing document...')
+    setIsAnalyzing(true);
+    setProgress(0);
+    setProgressStage("Analyzing document...");
 
     try {
       // First detect heading styles
       const styles = await detectHeadingStyles(pdfData, {
         onProgress: handleProgress,
-      })
-      setHeadingStyles(styles)
+      });
+      setHeadingStyles(styles);
 
       // Then generate TOC entries
       const tocEntries = await generateTOC(pdfData, {
         minFontSize,
         maxLevels,
         onProgress: handleProgress,
-      })
+      });
 
       const editableEntries: EditableTOCEntry[] = tocEntries.map((e) => ({
         ...e,
         isEditing: false,
-      }))
+      }));
 
-      setEntries(editableEntries)
-      onTOCGenerated?.(tocEntries)
+      setEntries(editableEntries);
+      onTOCGenerated?.(tocEntries);
 
       if (tocEntries.length === 0) {
         toast({
-          title: 'No headings found',
-          description: 'Try adjusting the minimum font size or add entries manually',
-        })
+          title: "No headings found",
+          description:
+            "Try adjusting the minimum font size or add entries manually",
+        });
       } else {
         toast({
-          title: 'Headings detected',
+          title: "Headings detected",
           description: `Found ${tocEntries.length} headings across ${new Set(tocEntries.map((e) => e.page)).size} pages`,
-        })
+        });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to analyze PDF'
+      const message =
+        error instanceof Error ? error.message : "Failed to analyze PDF";
       toast({
-        title: 'Analysis failed',
+        title: "Analysis failed",
         description: message,
-        variant: 'destructive',
-      })
+        variant: "destructive",
+      });
     } finally {
-      setIsAnalyzing(false)
-      setProgress(0)
-      setProgressStage('')
+      setIsAnalyzing(false);
+      setProgress(0);
+      setProgressStage("");
     }
-  }, [pdfData, minFontSize, maxLevels, handleProgress, onTOCGenerated, toast])
+  }, [pdfData, minFontSize, maxLevels, handleProgress, onTOCGenerated, toast]);
 
   /**
    * Generate PDF with TOC
@@ -434,16 +458,16 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
   const handleGenerateTOC = React.useCallback(async () => {
     if (!pdfData || entries.length === 0) {
       toast({
-        title: 'Cannot generate TOC',
-        description: 'Please upload a PDF and detect or add headings first',
-        variant: 'destructive',
-      })
-      return
+        title: "Cannot generate TOC",
+        description: "Please upload a PDF and detect or add headings first",
+        variant: "destructive",
+      });
+      return;
     }
 
-    setIsGenerating(true)
-    setProgress(0)
-    setProgressStage('Generating TOC...')
+    setIsGenerating(true);
+    setProgress(0);
+    setProgressStage("Generating TOC...");
 
     try {
       const insertOptions: InsertTOCOptions = {
@@ -452,40 +476,56 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
         includeLinks,
         showDottedLeaders,
         onProgress: handleProgress,
-      }
+      };
 
       // Convert editable entries back to regular entries
-      const tocEntries: TOCEntry[] = entries.map(({ isEditing, ...rest }) => rest)
+      const tocEntries: TOCEntry[] = entries.map(
+        ({ isEditing, ...rest }) => rest,
+      );
 
-      const result = await insertTOC(pdfData, tocEntries, insertOptions)
+      const result = await insertTOC(pdfData, tocEntries, insertOptions);
 
       if (result.success && result.data) {
-        onPDFReady?.(result.data, tocEntries)
+        onPDFReady?.(result.data, tocEntries);
 
-        const blob = arrayBufferToBlob(result.data, 'application/pdf')
-        const filename = file?.name.replace('.pdf', '_with_toc.pdf') || 'document_with_toc.pdf'
-        downloadBlob(blob, filename)
+        const blob = arrayBufferToBlob(result.data, "application/pdf");
+        const filename =
+          file?.name.replace(".pdf", "_with_toc.pdf") ||
+          "document_with_toc.pdf";
+        downloadBlob(blob, filename);
 
         toast({
-          title: 'TOC generated successfully',
+          title: "TOC generated successfully",
           description: `${entries.length} entries added to ${filename}`,
-        })
+        });
       } else {
-        throw new Error(result.error || 'Failed to generate TOC')
+        throw new Error(result.error || "Failed to generate TOC");
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to generate TOC'
+      const message =
+        error instanceof Error ? error.message : "Failed to generate TOC";
       toast({
-        title: 'Generation failed',
+        title: "Generation failed",
         description: message,
-        variant: 'destructive',
-      })
+        variant: "destructive",
+      });
     } finally {
-      setIsGenerating(false)
-      setProgress(0)
-      setProgressStage('')
+      setIsGenerating(false);
+      setProgress(0);
+      setProgressStage("");
     }
-  }, [pdfData, entries, file, tocTitle, includePageNumbers, includeLinks, showDottedLeaders, handleProgress, onPDFReady, toast])
+  }, [
+    pdfData,
+    entries,
+    file,
+    tocTitle,
+    includePageNumbers,
+    includeLinks,
+    showDottedLeaders,
+    handleProgress,
+    onPDFReady,
+    toast,
+  ]);
 
   /**
    * Add a new manual entry
@@ -493,20 +533,20 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
   const handleAddEntry = React.useCallback(() => {
     const newEntry: EditableTOCEntry = {
       id: generateId(),
-      title: 'New Entry',
+      title: "New Entry",
       page: 1,
       level: 1,
       isEditing: true,
-    }
-    setEntries((prev) => [...prev, newEntry])
-  }, [])
+    };
+    setEntries((prev) => [...prev, newEntry]);
+  }, []);
 
   /**
    * Remove an entry
    */
   const handleRemoveEntry = React.useCallback((id: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== id))
-  }, [])
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+  }, []);
 
   /**
    * Edit an entry's title
@@ -514,76 +554,77 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
   const handleEditEntry = React.useCallback((id: string, newTitle: string) => {
     setEntries((prev) =>
       prev.map((e) =>
-        e.id === id ? { ...e, title: newTitle, isEditing: false } : e
-      )
-    )
-  }, [])
+        e.id === id ? { ...e, title: newTitle, isEditing: false } : e,
+      ),
+    );
+  }, []);
 
   /**
    * Change an entry's level
    */
-  const handleLevelChange = React.useCallback((id: string, delta: number) => {
-    setEntries((prev) =>
-      prev.map((e) => {
-        if (e.id !== id) return e
-        const newLevel = Math.max(1, Math.min(maxLevels, e.level + delta))
-        return { ...e, level: newLevel }
-      })
-    )
-  }, [maxLevels])
+  const handleLevelChange = React.useCallback(
+    (id: string, delta: number) => {
+      setEntries((prev) =>
+        prev.map((e) => {
+          if (e.id !== id) return e;
+          const newLevel = Math.max(1, Math.min(maxLevels, e.level + delta));
+          return { ...e, level: newLevel };
+        }),
+      );
+    },
+    [maxLevels],
+  );
 
   /**
    * Start editing an entry
    */
   const handleStartEdit = React.useCallback((id: string) => {
-    setEntries((prev) =>
-      prev.map((e) => ({ ...e, isEditing: e.id === id }))
-    )
-  }, [])
+    setEntries((prev) => prev.map((e) => ({ ...e, isEditing: e.id === id })));
+  }, []);
 
   /**
    * Cancel editing
    */
   const handleCancelEdit = React.useCallback((id: string) => {
     setEntries((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, isEditing: false } : e))
-    )
-  }, [])
+      prev.map((e) => (e.id === id ? { ...e, isEditing: false } : e)),
+    );
+  }, []);
 
   /**
    * Handle drag end for reordering
    */
   const handleDragEnd = React.useCallback((event: DragEndEvent) => {
-    const { active, over } = event
+    const { active, over } = event;
 
     if (over && active.id !== over.id) {
       setEntries((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id)
-        const newIndex = items.findIndex((item) => item.id === over.id)
-        return arrayMove(items, oldIndex, newIndex)
-      })
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over.id);
+        return arrayMove(items, oldIndex, newIndex);
+      });
     }
-  }, [])
+  }, []);
 
   /**
    * Clear all entries
    */
   const handleClearAll = React.useCallback(() => {
-    setEntries([])
-  }, [])
+    setEntries([]);
+  }, []);
 
-  const isProcessing = isAnalyzing || isGenerating
+  const isProcessing = isAnalyzing || isGenerating;
 
   return (
-    <Card className={cn('w-full', className)}>
+    <Card className={cn("w-full", className)}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <List className="h-5 w-5 text-blue-500" />
           Table of Contents Generator
         </CardTitle>
         <CardDescription>
-          Auto-detect headings and generate a clickable Table of Contents for your PDF.
-          All processing happens locally in your browser.
+          Auto-detect headings and generate a clickable Table of Contents for
+          your PDF. All processing happens locally in your browser.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -603,16 +644,18 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
               <p className="text-sm font-medium text-surface-900 dark:text-white truncate">
                 {file.name}
               </p>
-              <p className="text-xs text-surface-500">{formatFileSize(file.size)}</p>
+              <p className="text-xs text-surface-500">
+                {formatFileSize(file.size)}
+              </p>
             </div>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
-                setFile(null)
-                setPdfData(null)
-                setEntries([])
-                setHeadingStyles([])
+                setFile(null);
+                setPdfData(null);
+                setEntries([]);
+                setHeadingStyles([]);
               }}
               disabled={isProcessing}
             >
@@ -631,7 +674,7 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
               className="text-surface-600 dark:text-surface-400"
             >
               <Settings2 className="h-4 w-4 mr-2" />
-              {showOptions ? 'Hide Options' : 'Show Options'}
+              {showOptions ? "Hide Options" : "Show Options"}
             </Button>
 
             {showOptions && (
@@ -647,7 +690,9 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
                       <label className="text-sm text-surface-600 dark:text-surface-400">
                         Minimum Font Size
                       </label>
-                      <span className="text-sm font-medium">{minFontSize}pt</span>
+                      <span className="text-sm font-medium">
+                        {minFontSize}pt
+                      </span>
                     </div>
                     <Slider
                       value={[minFontSize]}
@@ -700,7 +745,9 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
                       <input
                         type="checkbox"
                         checked={includePageNumbers}
-                        onChange={(e) => setIncludePageNumbers(e.target.checked)}
+                        onChange={(e) =>
+                          setIncludePageNumbers(e.target.checked)
+                        }
                         disabled={isProcessing}
                         className="rounded border-surface-300"
                       />
@@ -750,7 +797,7 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
                           className="px-2 py-1 bg-surface-200 dark:bg-surface-700 rounded text-xs"
                         >
                           H{style.level}: {style.fontSize}pt
-                          {style.isBold && ' (bold)'}
+                          {style.isBold && " (bold)"}
                         </span>
                       ))}
                     </div>
@@ -846,8 +893,8 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
           <div className="text-center py-8 border border-dashed border-surface-300 dark:border-surface-600 rounded-lg">
             <List className="h-10 w-10 mx-auto text-surface-400 mb-3" />
             <p className="text-sm text-surface-600 dark:text-surface-400 mb-4">
-              No TOC entries yet. Click "Auto-Detect Headings" to analyze the document
-              or add entries manually.
+              No TOC entries yet. Click "Auto-Detect Headings" to analyze the
+              document or add entries manually.
             </p>
             <Button variant="outline" size="sm" onClick={handleAddEntry}>
               <Plus className="h-4 w-4 mr-2" />
@@ -861,7 +908,7 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
               <span className="text-surface-600 dark:text-surface-400">
-                {progressStage || 'Processing...'}
+                {progressStage || "Processing..."}
               </span>
               <span className="font-medium">{Math.round(progress)}%</span>
             </div>
@@ -891,5 +938,5 @@ export function TOCPanel({ className, onTOCGenerated, onPDFReady }: TOCPanelProp
         )}
       </CardContent>
     </Card>
-  )
+  );
 }

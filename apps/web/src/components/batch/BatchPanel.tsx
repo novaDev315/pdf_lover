@@ -4,6 +4,7 @@
  */
 
 import * as React from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import {
   DndContext,
   closestCenter,
@@ -72,7 +73,7 @@ export function BatchPanel({
   const queue = useBatchStore((state) => state.queue);
   const queueStatus = useBatchStore((state) => state.queueStatus);
   const overallProgress = useBatchStore((state) => state.overallProgress);
-  const stats = useBatchStore(selectQueueStats);
+  const stats = useBatchStore(useShallow(selectQueueStats));
   const isProcessing = useBatchStore(selectIsQueueProcessing);
 
   const {

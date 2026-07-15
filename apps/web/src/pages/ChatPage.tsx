@@ -4,121 +4,90 @@
  * Integrates RAG pipeline for document-aware conversations
  */
 
-import * as React from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import * as React from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ChevronLeft,
   FileText,
   Upload,
   Loader2,
   AlertCircle,
-} from 'lucide-react'
+} from "lucide-react";
 
-import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
-import { ChatPanel, ChatToggleButton } from '@/components/chat/ChatPanel'
-import { useDocumentTypeDetection } from '@/components/chat/SuggestedQuestions'
-import { useChatStore } from '@/store/chat-store'
-import { usePDFStore } from '@/store/pdf-store'
-import { useSettingsStore } from '@/store/settings-store'
-import { useRAG } from '@/hooks/useRAG'
-import { cn } from '@/lib/utils'
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ChatPanel, ChatToggleButton } from "@/components/chat/ChatPanel";
+import { useDocumentTypeDetection } from "@/components/chat/SuggestedQuestions";
+import { useChatStore } from "@/store/chat-store";
+import { usePDFStore } from "@/store/pdf-store";
+import { useSettingsStore } from "@/store/settings-store";
+import { useRAG } from "@/hooks/useRAG";
+import { cn } from "@/lib/utils";
 import {
   generateLocalResponse,
   generateLocalResponseStream,
   initializeLocalModel,
-} from '@/lib/ai/local-llm'
-import {
-  sendChatCompletion,
-  streamChatCompletion,
-} from '@/lib/ai/openrouter'
-import { queryWithContext } from '@/lib/ai/rag'
-import type { Citation, Message } from '@pdflover/shared'
+} from "@/lib/ai/local-llm";
+import { sendChatCompletion, streamChatCompletion } from "@/lib/ai/openrouter";
+import { queryWithContext } from "@/lib/ai/rag";
+import type { Citation, Message, PDFPage } from "@pdflover/shared";
+import * as pdfjsLib from "pdfjs-dist";
+import type { TextItem } from "pdfjs-dist/types/src/display/api";
+import { PdfViewer } from "@/components/pdf/PdfViewer";
+import { db } from "@/lib/storage";
 
-/**
- * PDF Viewer placeholder component
- * In a real implementation, this would use PDF.js
- */
 function PDFViewer({
   documentId,
-  onPageChange,
   highlightCitation,
   className,
 }: {
-  documentId: string
-  onPageChange?: (page: number) => void
-  highlightCitation?: Citation | null
-  className?: string
+  documentId: string;
+  onPageChange?: (page: number) => void;
+  highlightCitation?: Citation | null;
+  className?: string;
 }) {
-  const { currentDocument } = usePDFStore()
+  const { currentDocument } = usePDFStore();
 
   if (!currentDocument) {
     return (
-      <div className={cn('flex h-full items-center justify-center', className)}>
+      <div className={cn("flex h-full items-center justify-center", className)}>
         <div className="text-center text-muted-foreground">
           <FileText className="mx-auto h-12 w-12 opacity-50" />
           <p className="mt-2">No document loaded</p>
         </div>
       </div>
-    )
+    );
+  }
+
+  if (!currentDocument.data) {
+    return (
+      <div
+        className={cn(
+          "flex h-full items-center justify-center text-sm text-destructive",
+          className,
+        )}
+      >
+        Stored document bytes are unavailable.
+      </div>
+    );
   }
 
   return (
-    <div className={cn('flex h-full flex-col bg-muted/30', className)}>
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 border-b bg-background px-4 py-2">
-        <span className="text-sm font-medium truncate">
-          {currentDocument.filename}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          ({currentDocument.pageCount} pages)
-        </span>
-      </div>
-
-      {/* PDF Content Placeholder */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="mx-auto max-w-3xl space-y-4">
-          {currentDocument.pages.map((page) => (
-            <div
-              key={page.pageNumber}
-              id={`page-${page.pageNumber}`}
-              className={cn(
-                'rounded-lg bg-white p-8 shadow-sm',
-                highlightCitation?.pageNumber === page.pageNumber &&
-                  'ring-2 ring-primary'
-              )}
-            >
-              <div className="mb-2 text-xs text-muted-foreground">
-                Page {page.pageNumber}
-              </div>
-              <div className="min-h-[400px] text-sm text-muted-foreground">
-                {/* Placeholder for actual PDF rendering */}
-                <p className="italic">
-                  [PDF page content would be rendered here using PDF.js]
-                </p>
-                {page.textContent && (
-                  <p className="mt-4 whitespace-pre-wrap text-foreground">
-                    {page.textContent.slice(0, 500)}
-                    {page.textContent.length > 500 && '...'}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
+    <PdfViewer
+      key={`${documentId}-${highlightCitation?.pageNumber ?? 1}`}
+      arrayBuffer={currentDocument.data}
+      initialPage={highlightCitation?.pageNumber ?? 1}
+      showToolbar
+      enableSearch
+      className={className}
+    />
+  );
 }
 
 /**
  * Empty state when no document is loaded
  */
-function EmptyState({
-  onUpload,
-}: {
-  onUpload: () => void
-}) {
+function EmptyState({ onUpload }: { onUpload: () => void }) {
   return (
     <div className="flex h-full items-center justify-center p-8">
       <Card className="max-w-md">
@@ -138,17 +107,13 @@ function EmptyState({
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
 
 /**
  * Loading state while processing document
  */
-function LoadingState({
-  message,
-}: {
-  message: string
-}) {
+function LoadingState({ message }: { message: string }) {
   return (
     <div className="flex h-full items-center justify-center">
       <div className="flex flex-col items-center gap-4">
@@ -156,22 +121,27 @@ function LoadingState({
         <p className="text-sm text-muted-foreground">{message}</p>
       </div>
     </div>
-  )
+  );
 }
 
 /**
  * ChatPage component provides side-by-side PDF viewer and chat interface
  */
 export function ChatPage() {
-  const { documentId } = useParams<{ documentId?: string }>()
-  const navigate = useNavigate()
+  const [searchParams] = useSearchParams();
+  const documentId = searchParams.get("document");
+  const navigate = useNavigate();
 
   // Stores
   const {
     currentDocument,
     isLoading: isPdfLoading,
     error: pdfError,
-  } = usePDFStore()
+    addDocument,
+    setCurrentDocument,
+    setLoading: setPdfLoading,
+    setError: setPdfError,
+  } = usePDFStore();
 
   const {
     messages,
@@ -184,11 +154,9 @@ export function ChatPage() {
     appendStreamingContent,
     finalizeStreamingMessage,
     setError,
-  } = useChatStore()
+  } = useChatStore();
 
-  const {
-    ai: aiSettings,
-  } = useSettingsStore()
+  const { ai: aiSettings } = useSettingsStore();
 
   // RAG hook for document indexing and querying
   const {
@@ -202,17 +170,91 @@ export function ChatPage() {
     topK: aiSettings.ragTopK,
     minSimilarity: 0.3,
     persist: true,
-  })
+  });
 
   // Local state
-  const [chatOpen, setChatOpen] = React.useState(true)
-  const [highlightedCitation, setHighlightedCitation] = React.useState<Citation | null>(null)
+  const [chatOpen, setChatOpen] = React.useState(true);
+  const [highlightedCitation, setHighlightedCitation] =
+    React.useState<Citation | null>(null);
+
+  React.useEffect(() => {
+    if (!documentId || currentDocument?.id === documentId) return;
+    let cancelled = false;
+    setPdfLoading(true);
+    setPdfError(null);
+    void Promise.all([
+      db.getDocument(documentId),
+      db.getDocumentBytes(documentId),
+    ])
+      .then(async ([stored, blob]) => {
+        if (!stored || !blob)
+          throw new Error("The selected library document is unavailable");
+        const data = await blob.arrayBuffer();
+        const proxy = await pdfjsLib.getDocument({ data: data.slice(0) })
+          .promise;
+        const pages: PDFPage[] = [];
+        for (
+          let pageNumber = 1;
+          pageNumber <= proxy.numPages;
+          pageNumber += 1
+        ) {
+          const page = await proxy.getPage(pageNumber);
+          const viewport = page.getViewport({ scale: 1 });
+          const content = await page.getTextContent();
+          const textContent = content.items
+            .filter((item): item is TextItem => "str" in item)
+            .map((item) => `${item.str}${item.hasEOL ? "\n" : " "}`)
+            .join("")
+            .trim();
+          pages.push({
+            pageNumber,
+            width: viewport.width,
+            height: viewport.height,
+            rotation: (viewport.rotation % 360) as 0 | 90 | 180 | 270,
+            textContent,
+          });
+        }
+        await proxy.destroy();
+        if (cancelled) return;
+        const document = {
+          id: stored.id,
+          filename: stored.filename,
+          fileSize: stored.fileSize,
+          mimeType: "application/pdf" as const,
+          pageCount: stored.pageCount,
+          metadata: stored.metadata,
+          pages,
+          data,
+          createdAt: stored.createdAt,
+          updatedAt: stored.updatedAt,
+        };
+        addDocument(document);
+        setCurrentDocument(document);
+        setPdfLoading(false);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setPdfError(
+            cause instanceof Error ? cause.message : "Failed to load document",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    addDocument,
+    currentDocument?.id,
+    documentId,
+    setCurrentDocument,
+    setPdfError,
+    setPdfLoading,
+  ]);
 
   // Detect document type from content
-  const documentText = currentDocument?.pages
-    .map((p) => p.textContent || '')
-    .join(' ') || ''
-  const documentType = useDocumentTypeDetection(documentText)
+  const documentText =
+    currentDocument?.pages.map((p) => p.textContent || "").join(" ") || "";
+  const documentType = useDocumentTypeDetection(documentText);
 
   // Initialize conversation when document loads
   React.useEffect(() => {
@@ -222,16 +264,20 @@ export function ChatPage() {
         documentIds: [currentDocument.id],
         provider: aiSettings.provider,
         modelId:
-          aiSettings.provider === 'local'
+          aiSettings.provider === "local"
             ? aiSettings.localModelId
             : aiSettings.openRouterModelId,
-      })
+      });
     }
-  }, [currentDocument, currentConversation, aiSettings, startConversation])
+  }, [currentDocument, currentConversation, aiSettings, startConversation]);
 
   // Index document for RAG when loaded
   React.useEffect(() => {
-    if (currentDocument && !indexingState.isIndexed && !indexingState.isIndexing) {
+    if (
+      currentDocument &&
+      !indexingState.isIndexed &&
+      !indexingState.isIndexing
+    ) {
       indexDocumentRAG({
         id: currentDocument.id,
         name: currentDocument.filename,
@@ -239,33 +285,38 @@ export function ChatPage() {
           pageNumber: page.pageNumber,
           textContent: page.textContent,
         })),
-      })
+      });
     }
-  }, [currentDocument, indexingState.isIndexed, indexingState.isIndexing, indexDocumentRAG])
+  }, [
+    currentDocument,
+    indexingState.isIndexed,
+    indexingState.isIndexing,
+    indexDocumentRAG,
+  ]);
 
   // Initialize AI model
   React.useEffect(() => {
-    if (aiSettings.provider === 'local') {
+    if (aiSettings.provider === "local") {
       initializeLocalModel(aiSettings.localModelId).then((result) => {
         if (!result.success) {
-          console.error('Failed to initialize local model:', result.error)
+          console.error("Failed to initialize local model:", result.error);
         }
-      })
+      });
     }
-  }, [aiSettings.provider, aiSettings.localModelId])
+  }, [aiSettings.provider, aiSettings.localModelId]);
 
   // Handle sending a message
   const handleSendMessage = React.useCallback(
     async (content: string) => {
-      if (!currentDocument || !currentConversation) return
+      if (!currentDocument || !currentConversation) return;
 
       // Add user message
       const userMessage = addMessage({
-        role: 'user',
+        role: "user",
         content,
-      })
+      });
 
-      setIsGenerating(true)
+      setIsGenerating(true);
 
       try {
         // Get relevant context using RAG
@@ -273,21 +324,21 @@ export function ChatPage() {
           topK: aiSettings.ragTopK,
           minSimilarity: 0.3,
           maxContextLength: 4000,
-        })
+        });
 
-        const { context } = ragResult
-        const citations = context.citations
+        const { context } = ragResult;
+        const citations = context.citations;
 
         // Build messages array for API
         const apiMessages: Message[] = [
           ...messages,
           {
             id: userMessage.id,
-            role: 'user' as const,
+            role: "user" as const,
             content,
             timestamp: new Date(),
           },
-        ]
+        ];
 
         // Build system prompt with RAG context
         const systemPrompt = context.contextText
@@ -302,10 +353,10 @@ ${context.contextText}
 - Answer based on the context above
 - Include page number citations when referencing specific information (e.g., [Page 3])
 - Be concise and accurate`
-          : undefined
+          : undefined;
 
         // Generate response based on provider
-        if (aiSettings.provider === 'local') {
+        if (aiSettings.provider === "local") {
           if (aiSettings.enableStreaming) {
             // Streaming response
             for await (const chunk of generateLocalResponseStream(apiMessages, {
@@ -314,9 +365,9 @@ ${context.contextText}
               temperature: aiSettings.defaultTemperature,
               maxTokens: aiSettings.defaultMaxTokens,
             })) {
-              appendStreamingContent(chunk.delta)
+              appendStreamingContent(chunk.delta);
               if (chunk.isFinished) {
-                finalizeStreamingMessage(citations, aiSettings.localModelId)
+                finalizeStreamingMessage(citations, aiSettings.localModelId);
               }
             }
           } else {
@@ -326,69 +377,61 @@ ${context.contextText}
               systemPrompt,
               temperature: aiSettings.defaultTemperature,
               maxTokens: aiSettings.defaultMaxTokens,
-            })
+            });
 
             addMessage({
-              role: 'assistant',
+              role: "assistant",
               content: response.message.content,
               citations,
               model: response.model,
               processingTime: response.message.processingTime,
-            })
+            });
           }
         } else {
-          // Cloud AI (OpenRouter)
-          if (!aiSettings.openRouterApiKey) {
-            throw new Error('OpenRouter API key not configured')
-          }
-
+          // Cloud AI is proxied by the backend so provider credentials never
+          // enter browser storage.
           if (aiSettings.enableStreaming) {
             // Streaming response
-            for await (const chunk of streamChatCompletion(
-              apiMessages,
-              aiSettings.openRouterApiKey,
-              {
-                modelId: aiSettings.openRouterModelId,
-                systemPrompt,
-                temperature: aiSettings.defaultTemperature,
-                maxTokens: aiSettings.defaultMaxTokens,
-              }
-            )) {
-              appendStreamingContent(chunk.delta)
+            for await (const chunk of streamChatCompletion(apiMessages, {
+              modelId: aiSettings.openRouterModelId,
+              systemPrompt,
+              temperature: aiSettings.defaultTemperature,
+              maxTokens: aiSettings.defaultMaxTokens,
+            })) {
+              appendStreamingContent(chunk.delta);
               if (chunk.isFinished) {
-                finalizeStreamingMessage(citations, aiSettings.openRouterModelId)
+                finalizeStreamingMessage(
+                  citations,
+                  aiSettings.openRouterModelId,
+                );
               }
             }
           } else {
             // Non-streaming response
-            const response = await sendChatCompletion(
-              apiMessages,
-              aiSettings.openRouterApiKey,
-              {
-                modelId: aiSettings.openRouterModelId,
-                systemPrompt,
-                temperature: aiSettings.defaultTemperature,
-                maxTokens: aiSettings.defaultMaxTokens,
-              }
-            )
+            const response = await sendChatCompletion(apiMessages, {
+              modelId: aiSettings.openRouterModelId,
+              systemPrompt,
+              temperature: aiSettings.defaultTemperature,
+              maxTokens: aiSettings.defaultMaxTokens,
+            });
 
             addMessage({
-              role: 'assistant',
+              role: "assistant",
               content: response.message.content,
               citations,
               model: response.model,
               processingTime: response.message.processingTime,
-            })
+            });
           }
         }
       } catch (error) {
-        console.error('Failed to generate response:', error)
+        console.error("Failed to generate response:", error);
         setError(
           error instanceof Error
             ? error.message
-            : 'Failed to generate response'
-        )
-        setIsGenerating(false)
+            : "Failed to generate response",
+        );
+        setIsGenerating(false);
       }
     },
     [
@@ -401,53 +444,40 @@ ${context.contextText}
       appendStreamingContent,
       finalizeStreamingMessage,
       setError,
-    ]
-  )
+    ],
+  );
 
   // Handle regenerating a response
   const handleRegenerate = React.useCallback(
     (messageId: string) => {
       // Find the message before this one (should be user message)
-      const messageIndex = messages.findIndex((m) => m.id === messageId)
-      if (messageIndex <= 0) return
+      const messageIndex = messages.findIndex((m) => m.id === messageId);
+      if (messageIndex <= 0) return;
 
-      const userMessage = messages[messageIndex - 1]
-      if (userMessage.role !== 'user') return
+      const userMessage = messages[messageIndex - 1];
+      if (userMessage.role !== "user") return;
 
       // Resend the user's message
-      handleSendMessage(userMessage.content)
+      handleSendMessage(userMessage.content);
     },
-    [messages, handleSendMessage]
-  )
+    [messages, handleSendMessage],
+  );
 
   // Handle citation navigation
   const handleCitationNavigate = React.useCallback((citation: Citation) => {
-    setHighlightedCitation(citation)
-
-    // Scroll to the page
-    const pageElement = document.getElementById(`page-${citation.pageNumber}`)
-    if (pageElement) {
-      pageElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
+    setHighlightedCitation(citation);
 
     // Clear highlight after a delay
-    setTimeout(() => setHighlightedCitation(null), 3000)
-  }, [])
+    setTimeout(() => setHighlightedCitation(null), 3000);
+  }, []);
 
-  // Handle file upload (placeholder)
   const handleUpload = React.useCallback(() => {
-    // In real implementation, this would open a file picker
-    // and load the PDF into the store
-    navigate('/')
-  }, [navigate])
+    navigate("/files");
+  }, [navigate]);
 
   // Show loading state (only block UI if PDF is loading, not during indexing)
   if (isPdfLoading) {
-    return (
-      <LoadingState
-        message="Loading document..."
-      />
-    )
+    return <LoadingState message="Loading document..." />;
   }
 
   // Show error state
@@ -457,15 +487,15 @@ ${context.contextText}
         <div className="flex flex-col items-center gap-4 text-center">
           <AlertCircle className="h-12 w-12 text-destructive" />
           <p className="text-sm text-muted-foreground">{pdfError}</p>
-          <Button onClick={() => navigate('/')}>Go Back</Button>
+          <Button onClick={() => navigate("/")}>Go Back</Button>
         </div>
       </div>
-    )
+    );
   }
 
   // Show empty state
   if (!currentDocument) {
-    return <EmptyState onUpload={handleUpload} />
+    return <EmptyState onUpload={handleUpload} />;
   }
 
   return (
@@ -475,14 +505,14 @@ ${context.contextText}
         variant="ghost"
         size="icon"
         className="absolute left-4 top-4 z-10"
-        onClick={() => navigate('/')}
+        onClick={() => navigate("/")}
         aria-label="Go back"
       >
         <ChevronLeft className="h-5 w-5" />
       </Button>
 
       {/* PDF Viewer */}
-      <div className={cn('flex-1 transition-all', chatOpen ? 'mr-0' : 'mr-0')}>
+      <div className={cn("flex-1 transition-all", chatOpen ? "mr-0" : "mr-0")}>
         <PDFViewer
           documentId={currentDocument.id}
           highlightCitation={highlightedCitation}
@@ -506,14 +536,17 @@ ${context.contextText}
         isDocumentIndexed={indexingState.isIndexed}
         indexedChunkCount={indexingState.chunkCount}
         onReindex={() => {
-          indexDocumentRAG({
-            id: currentDocument.id,
-            name: currentDocument.filename,
-            pages: currentDocument.pages.map((page) => ({
-              pageNumber: page.pageNumber,
-              textContent: page.textContent,
-            })),
-          }, true)
+          indexDocumentRAG(
+            {
+              id: currentDocument.id,
+              name: currentDocument.filename,
+              pages: currentDocument.pages.map((page) => ({
+                pageNumber: page.pageNumber,
+                textContent: page.textContent,
+              })),
+            },
+            true,
+          );
         }}
       />
 
@@ -526,7 +559,7 @@ ${context.contextText}
         />
       )}
     </div>
-  )
+  );
 }
 
-export default ChatPage
+export default ChatPage;

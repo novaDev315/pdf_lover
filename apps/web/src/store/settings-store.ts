@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
-import type { AIProvider } from '@pdflover/shared';
+import type { AIProvider, LocalModelId } from '@pdflover/shared';
 
 /**
  * Theme options
@@ -77,10 +77,8 @@ export interface ViewerSettings {
 export interface AISettings {
   /** Default AI provider */
   provider: AIProvider;
-  /** OpenRouter API key (encrypted in storage) */
-  openRouterApiKey: string | null;
   /** Default model ID for local inference */
-  localModelId: string;
+  localModelId: LocalModelId;
   /** Default model ID for OpenRouter */
   openRouterModelId: string;
   /** Default temperature (0-2) */
@@ -95,8 +93,6 @@ export interface AISettings {
   ragChunkOverlap: number;
   /** RAG top K results */
   ragTopK: number;
-  /** Auto-index documents for AI search */
-  autoIndexDocuments: boolean;
 }
 
 /**
@@ -109,28 +105,8 @@ export interface ProcessingSettings {
   defaultImageDpi: number;
   /** Default image quality */
   defaultImageQuality: 'low' | 'medium' | 'high' | 'maximum';
-  /** Auto-generate thumbnails */
-  autoGenerateThumbnails: boolean;
-  /** Auto-extract text */
-  autoExtractText: boolean;
   /** OCR language */
   ocrLanguage: string;
-  /** Auto-cleanup temp files */
-  autoCleanupTempFiles: boolean;
-}
-
-/**
- * Privacy settings
- */
-export interface PrivacySettings {
-  /** Enable analytics (anonymous usage data) */
-  enableAnalytics: boolean;
-  /** Enable crash reporting */
-  enableCrashReporting: boolean;
-  /** Clear data on exit */
-  clearDataOnExit: boolean;
-  /** Allow cloud sync */
-  allowCloudSync: boolean;
 }
 
 /**
@@ -149,8 +125,6 @@ export interface SettingsState {
   ai: AISettings;
   /** Processing settings */
   processing: ProcessingSettings;
-  /** Privacy settings */
-  privacy: PrivacySettings;
   /** First run flag */
   isFirstRun: boolean;
   /** Settings version for migrations */
@@ -167,8 +141,6 @@ export interface SettingsActions {
   setLanguage: (language: string) => void;
   /** Set AI provider */
   setAIProvider: (provider: AIProvider) => void;
-  /** Set OpenRouter API key */
-  setApiKey: (apiKey: string | null) => void;
   /** Update appearance settings */
   updateAppearanceSettings: (settings: Partial<AppearanceSettings>) => void;
   /** Update viewer settings */
@@ -177,8 +149,6 @@ export interface SettingsActions {
   updateAISettings: (settings: Partial<AISettings>) => void;
   /** Update processing settings */
   updateProcessingSettings: (settings: Partial<ProcessingSettings>) => void;
-  /** Update privacy settings */
-  updatePrivacySettings: (settings: Partial<PrivacySettings>) => void;
   /** Reset viewer settings to defaults */
   resetViewerSettings: () => void;
   /** Reset AI settings to defaults */
@@ -224,16 +194,14 @@ const defaultViewerSettings: ViewerSettings = {
  */
 const defaultAISettings: AISettings = {
   provider: 'local',
-  openRouterApiKey: null,
   localModelId: 'Xenova/flan-t5-small',
-  openRouterModelId: 'anthropic/claude-3-haiku',
+  openRouterModelId: 'openrouter/auto',
   defaultTemperature: 0.7,
   defaultMaxTokens: 2048,
   enableStreaming: true,
   ragChunkSize: 512,
   ragChunkOverlap: 50,
   ragTopK: 5,
-  autoIndexDocuments: true,
 };
 
 /**
@@ -243,20 +211,7 @@ const defaultProcessingSettings: ProcessingSettings = {
   defaultCompressionLevel: 'medium',
   defaultImageDpi: 150,
   defaultImageQuality: 'high',
-  autoGenerateThumbnails: true,
-  autoExtractText: true,
   ocrLanguage: 'eng',
-  autoCleanupTempFiles: true,
-};
-
-/**
- * Default privacy settings
- */
-const defaultPrivacySettings: PrivacySettings = {
-  enableAnalytics: false,
-  enableCrashReporting: false,
-  clearDataOnExit: false,
-  allowCloudSync: false,
 };
 
 /**
@@ -269,9 +224,8 @@ const initialState: SettingsState = {
   viewer: defaultViewerSettings,
   ai: defaultAISettings,
   processing: defaultProcessingSettings,
-  privacy: defaultPrivacySettings,
   isFirstRun: true,
-  version: 1,
+  version: 3,
 };
 
 /**
@@ -306,12 +260,6 @@ export const useSettingsStore = create<SettingsStore>()(
         });
       },
 
-      setApiKey: (apiKey: string | null) => {
-        set((state) => {
-          state.ai.openRouterApiKey = apiKey;
-        });
-      },
-
       updateAppearanceSettings: (settings: Partial<AppearanceSettings>) => {
         set((state) => {
           state.appearance = { ...state.appearance, ...settings };
@@ -333,12 +281,6 @@ export const useSettingsStore = create<SettingsStore>()(
       updateProcessingSettings: (settings: Partial<ProcessingSettings>) => {
         set((state) => {
           state.processing = { ...state.processing, ...settings };
-        });
-      },
-
-      updatePrivacySettings: (settings: Partial<PrivacySettings>) => {
-        set((state) => {
-          state.privacy = { ...state.privacy, ...settings };
         });
       },
 
@@ -370,19 +312,39 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
-      version: 1,
+      version: 3,
       migrate: (persistedState: unknown, version: number) => {
-        // Handle migrations for future schema changes
-        const state = persistedState as SettingsState;
-        if (version === 0) {
-          // Migration from version 0 to 1
-          return {
-            ...initialState,
-            ...state,
-            version: 1,
+        const state = persistedState as Partial<SettingsState> & {
+          ai?: Partial<AISettings> & {
+            openRouterApiKey?: string | null;
+            autoIndexDocuments?: boolean;
           };
-        }
-        return state;
+          processing?: Partial<ProcessingSettings> & {
+            autoGenerateThumbnails?: boolean;
+            autoExtractText?: boolean;
+            autoCleanupTempFiles?: boolean;
+          };
+          privacy?: unknown;
+        };
+        const { privacy: _removedPrivacy, ...persistedSettings } = state;
+        const {
+          openRouterApiKey: _removedSecret,
+          autoIndexDocuments: _removedAutoIndex,
+          ...persistedAI
+        } = state.ai ?? {};
+        const {
+          autoGenerateThumbnails: _removedThumbnails,
+          autoExtractText: _removedTextExtraction,
+          autoCleanupTempFiles: _removedCleanup,
+          ...persistedProcessing
+        } = state.processing ?? {};
+        return {
+          ...initialState,
+          ...persistedSettings,
+          ai: { ...defaultAISettings, ...persistedAI },
+          processing: { ...defaultProcessingSettings, ...persistedProcessing },
+          version: 3,
+        };
       },
       partialize: (state) => ({
         // Only persist these fields
@@ -392,7 +354,6 @@ export const useSettingsStore = create<SettingsStore>()(
         viewer: state.viewer,
         ai: state.ai,
         processing: state.processing,
-        privacy: state.privacy,
         isFirstRun: state.isFirstRun,
         version: state.version,
       }),
@@ -415,22 +376,8 @@ export const selectEffectiveTheme = (state: SettingsStore): 'light' | 'dark' => 
 };
 
 /**
- * Selector: Check if API key is configured
- */
-export const selectHasApiKey = (state: SettingsStore): boolean => {
-  return state.ai.openRouterApiKey !== null && state.ai.openRouterApiKey.length > 0;
-};
-
-/**
  * Selector: Get current AI model ID based on provider
  */
 export const selectCurrentModelId = (state: SettingsStore): string => {
   return state.ai.provider === 'local' ? state.ai.localModelId : state.ai.openRouterModelId;
-};
-
-/**
- * Selector: Check if cloud features are enabled
- */
-export const selectCloudEnabled = (state: SettingsStore): boolean => {
-  return state.privacy.allowCloudSync;
 };

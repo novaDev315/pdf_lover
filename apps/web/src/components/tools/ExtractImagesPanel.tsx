@@ -224,7 +224,7 @@ export function ExtractImagesPanel({ className }: ExtractImagesPanelProps) {
     const mimeType = image.format === 'jpeg' ? 'image/jpeg' :
                      image.format === 'webp' ? 'image/webp' :
                      'image/png'
-    const blob = new Blob([image.data], { type: mimeType })
+    const blob = new Blob([new Uint8Array(image.data).buffer as ArrayBuffer], { type: mimeType })
     return URL.createObjectURL(blob)
   }, [])
 
@@ -235,7 +235,7 @@ export function ExtractImagesPanel({ className }: ExtractImagesPanelProps) {
     const mimeType = image.format === 'jpeg' ? 'image/jpeg' :
                      image.format === 'webp' ? 'image/webp' :
                      'image/png'
-    const blob = new Blob([image.data], { type: mimeType })
+    const blob = new Blob([new Uint8Array(image.data).buffer as ArrayBuffer], { type: mimeType })
     const filename = `image_page${image.page}_${image.index + 1}.${image.format}`
     downloadBlob(blob, filename)
   }, [])

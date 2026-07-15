@@ -53,6 +53,7 @@ import {
   type DimensionUnit,
 } from '@pdflover/pdf-core'
 import type { ProgressInfo } from '@pdflover/shared'
+import * as pdfjsLib from 'pdfjs-dist'
 
 /**
  * Props for CropPanel component
@@ -110,7 +111,6 @@ export function CropPanel({ className, initialFile, onComplete }: CropPanelProps
 
   // Preview state
   const [previewUrl, setPreviewUrl] = React.useState<string | null>(null)
-  const canvasRef = React.useRef<HTMLCanvasElement>(null)
 
   // Interactive crop box state
   const [isDragging, setIsDragging] = React.useState(false)
@@ -126,14 +126,31 @@ export function CropPanel({ className, initialFile, onComplete }: CropPanelProps
     setFile(pdfFile)
     setCroppedResult(null)
 
-    // Generate preview using PDF.js (if available)
+    setPreviewUrl(null)
     try {
-      const url = URL.createObjectURL(pdfFile)
-      setPreviewUrl(url)
-    } catch {
+      const bytes = await pdfFile.arrayBuffer()
+      const documentProxy = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise
+      const page = await documentProxy.getPage(1)
+      const viewport = page.getViewport({ scale: 1 })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.ceil(viewport.width)
+      canvas.height = Math.ceil(viewport.height)
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Canvas 2D rendering is unavailable')
+      await page.render({ canvasContext: context, viewport }).promise
+      setCropWidth(viewport.width)
+      setCropHeight(viewport.height)
+      setPreviewUrl(canvas.toDataURL('image/png'))
+      await documentProxy.destroy()
+    } catch (error) {
       setPreviewUrl(null)
+      toast({
+        title: 'Preview unavailable',
+        description: error instanceof Error ? error.message : 'The first page could not be rendered',
+        variant: 'destructive',
+      })
     }
-  }, [])
+  }, [toast])
 
   /**
    * Clear the selected file
@@ -141,11 +158,8 @@ export function CropPanel({ className, initialFile, onComplete }: CropPanelProps
   const handleClearFile = React.useCallback(() => {
     setFile(null)
     setCroppedResult(null)
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl)
-      setPreviewUrl(null)
-    }
-  }, [previewUrl])
+    setPreviewUrl(null)
+  }, [])
 
   /**
    * Handle progress updates
@@ -353,14 +367,11 @@ export function CropPanel({ className, initialFile, onComplete }: CropPanelProps
             <div className="relative aspect-[3/4] bg-surface-100 dark:bg-surface-800 rounded-lg border-2 border-dashed border-surface-300 dark:border-surface-600 overflow-hidden">
               {previewUrl ? (
                 <div className="relative w-full h-full">
-                  {/* PDF Preview would go here - using placeholder */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center text-surface-500">
-                      <FileText className="h-16 w-16 mx-auto mb-2 opacity-50" />
-                      <p className="text-sm">PDF Preview</p>
-                      <p className="text-xs opacity-75">Crop area shown below</p>
-                    </div>
-                  </div>
+                  <img
+                    src={previewUrl}
+                    alt="First PDF page crop preview"
+                    className="h-full w-full object-contain"
+                  />
 
                   {/* Visual Crop Box Overlay */}
                   {cropMode === 'percentage' && (

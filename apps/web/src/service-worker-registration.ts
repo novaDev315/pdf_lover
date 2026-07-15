@@ -20,104 +20,164 @@ export interface ServiceWorkerConfig {
 
 /** Global registration instance for external access */
 let swRegistration: ServiceWorkerRegistration | null = null;
+let registrationPromise: Promise<ServiceWorkerRegistration | null> | null =
+  null;
+let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
+const registrationConfigs = new Set<ServiceWorkerConfig>();
+
+function notifyConfigs<K extends keyof ServiceWorkerConfig>(
+  callback: K,
+  ...args: Parameters<NonNullable<ServiceWorkerConfig[K]>>
+): void {
+  for (const config of registrationConfigs) {
+    const handler = config[callback] as
+      | ((...values: typeof args) => void)
+      | undefined;
+    handler?.(...args);
+  }
+}
 
 /**
  * Register the service worker
  */
 export async function registerServiceWorker(
-  config: ServiceWorkerConfig = {}
+  config: ServiceWorkerConfig = {},
 ): Promise<ServiceWorkerRegistration | null> {
-  if (!('serviceWorker' in navigator)) {
-    console.warn('[SW Registration] Service workers are not supported in this browser');
+  registrationConfigs.add(config);
+
+  if (!("serviceWorker" in navigator)) {
+    console.warn(
+      "[SW Registration] Service workers are not supported in this browser",
+    );
     return null;
   }
 
   // Only register in production or if explicitly enabled
   const isProduction = import.meta.env.PROD;
-  const forceEnable = import.meta.env.VITE_ENABLE_SW === 'true';
+  const forceEnable = import.meta.env.VITE_ENABLE_SW === "true";
 
   if (!isProduction && !forceEnable) {
-    console.log('[SW Registration] Skipping SW registration in development mode');
+    console.log(
+      "[SW Registration] Skipping SW registration in development mode",
+    );
     return null;
   }
 
-  try {
-    const registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/',
-      updateViaCache: 'none',
-    });
+  if (swRegistration) {
+    config.onReady?.(swRegistration);
+    if (swRegistration.waiting) config.onUpdateAvailable?.(swRegistration);
+    return swRegistration;
+  }
 
-    swRegistration = registration;
+  if (registrationPromise) return registrationPromise;
 
-    // Handle registration success
-    console.log('[SW Registration] Service worker registered:', registration.scope);
+  registrationPromise = (async () => {
+    const hadControllerAtRegistration = Boolean(
+      navigator.serviceWorker.controller,
+    );
+    let hasActiveController = hadControllerAtRegistration;
+    let reloadRequested = false;
 
-    // Check if there's a waiting service worker
-    if (registration.waiting) {
-      config.onUpdateAvailable?.(registration);
-    }
-
-    // Listen for updates
-    registration.addEventListener('updatefound', () => {
-      const newWorker = registration.installing;
-      if (!newWorker) return;
-
-      newWorker.addEventListener('statechange', () => {
-        if (newWorker.state === 'installed') {
-          if (navigator.serviceWorker.controller) {
-            // New version available
-            console.log('[SW Registration] New version available');
-            config.onUpdateAvailable?.(registration);
-          } else {
-            // First install
-            console.log('[SW Registration] Content cached for offline use');
-          }
-        }
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", {
+        scope: "/",
+        updateViaCache: "none",
       });
-    });
 
-    // Handle controller change (after skipWaiting)
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      console.log('[SW Registration] Controller changed, reloading...');
-      config.onUpdated?.();
-      // Optionally reload the page
-      window.location.reload();
-    });
+      swRegistration = registration;
 
-    // Wait for the service worker to be ready
-    const readyRegistration = await navigator.serviceWorker.ready;
-    config.onReady?.(readyRegistration);
+      // Handle registration success
+      console.log(
+        "[SW Registration] Service worker registered:",
+        registration.scope,
+      );
 
-    // Set up periodic update checks (every hour)
-    setInterval(() => {
-      registration.update().catch(console.error);
-    }, 60 * 60 * 1000);
+      // Check if there's a waiting service worker
+      if (registration.waiting) {
+        notifyConfigs("onUpdateAvailable", registration);
+      }
 
-    return registration;
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    console.error('[SW Registration] Registration failed:', err);
-    config.onError?.(err);
-    return null;
-  }
+      // Listen for updates
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing;
+        if (!newWorker) return;
+
+        newWorker.addEventListener("statechange", () => {
+          if (newWorker.state === "installed") {
+            if (navigator.serviceWorker.controller) {
+              // New version available
+              console.log("[SW Registration] New version available");
+              notifyConfigs("onUpdateAvailable", registration);
+            } else {
+              // First install
+              console.log("[SW Registration] Content cached for offline use");
+            }
+          }
+        });
+      });
+
+      // Handle controller change (after skipWaiting)
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        // clients.claim() also fires controllerchange on the first install. The
+        // app is already running the current assets, so reloading here can erase
+        // a file selection or an in-progress local operation.
+        if (!hasActiveController) {
+          hasActiveController = true;
+          return;
+        }
+        if (reloadRequested) return;
+        reloadRequested = true;
+        console.log("[SW Registration] Controller changed, reloading...");
+        notifyConfigs("onUpdated");
+        window.location.reload();
+      });
+
+      // Wait for the service worker to be ready
+      const readyRegistration = await navigator.serviceWorker.ready;
+      notifyConfigs("onReady", readyRegistration);
+
+      // Set up periodic update checks (every hour)
+      updateCheckTimer = setInterval(
+        () => {
+          registration.update().catch(console.error);
+        },
+        60 * 60 * 1000,
+      );
+
+      return registration;
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error("[SW Registration] Registration failed:", err);
+      notifyConfigs("onError", err);
+      registrationPromise = null;
+      return null;
+    }
+  })();
+
+  return registrationPromise;
 }
 
 /**
  * Unregister the service worker
  */
 export async function unregisterServiceWorker(): Promise<boolean> {
-  if (!('serviceWorker' in navigator)) {
+  if (!("serviceWorker" in navigator)) {
     return false;
   }
 
   try {
     const registration = await navigator.serviceWorker.ready;
     const success = await registration.unregister();
-    console.log('[SW Registration] Service worker unregistered:', success);
+    console.log("[SW Registration] Service worker unregistered:", success);
     swRegistration = null;
+    registrationPromise = null;
+    if (updateCheckTimer) {
+      clearInterval(updateCheckTimer);
+      updateCheckTimer = null;
+    }
     return success;
   } catch (error) {
-    console.error('[SW Registration] Unregistration failed:', error);
+    console.error("[SW Registration] Unregistration failed:", error);
     return false;
   }
 }
@@ -127,7 +187,7 @@ export async function unregisterServiceWorker(): Promise<boolean> {
  */
 export function skipWaiting(): void {
   if (swRegistration?.waiting) {
-    swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    swRegistration.waiting.postMessage({ type: "SKIP_WAITING" });
   }
 }
 
@@ -149,14 +209,14 @@ export function hasUpdateWaiting(): boolean {
  * Clear all service worker caches
  */
 export async function clearCaches(): Promise<void> {
-  if ('caches' in window) {
+  if ("caches" in window) {
     const cacheNames = await caches.keys();
     await Promise.all(
       cacheNames
-        .filter((name) => name.startsWith('pdflover-'))
-        .map((name) => caches.delete(name))
+        .filter((name) => name.startsWith("pdflover-"))
+        .map((name) => caches.delete(name)),
     );
-    console.log('[SW Registration] Caches cleared');
+    console.log("[SW Registration] Caches cleared");
   }
 }
 
@@ -175,7 +235,7 @@ export function postMessage(message: unknown): void {
 export function sendMessage<T = unknown>(message: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
     if (!navigator.serviceWorker.controller) {
-      reject(new Error('No active service worker'));
+      reject(new Error("No active service worker"));
       return;
     }
 
@@ -188,7 +248,9 @@ export function sendMessage<T = unknown>(message: unknown): Promise<T> {
       }
     };
 
-    navigator.serviceWorker.controller.postMessage(message, [messageChannel.port2]);
+    navigator.serviceWorker.controller.postMessage(message, [
+      messageChannel.port2,
+    ]);
   });
 }
 
@@ -197,7 +259,9 @@ export function sendMessage<T = unknown>(message: unknown): Promise<T> {
  */
 export async function getServiceWorkerVersion(): Promise<string | null> {
   try {
-    const response = await sendMessage<{ version: string }>({ type: 'GET_VERSION' });
+    const response = await sendMessage<{ version: string }>({
+      type: "GET_VERSION",
+    });
     return response.version;
   } catch {
     return null;
@@ -208,25 +272,25 @@ export async function getServiceWorkerVersion(): Promise<string | null> {
  * Pre-cache specific URLs
  */
 export function precacheUrls(urls: string[]): void {
-  postMessage({ type: 'CACHE_URLS', payload: { urls } });
+  postMessage({ type: "CACHE_URLS", payload: { urls } });
 }
 
 /**
  * Set up online/offline status monitoring
  */
 export function setupOnlineStatusMonitoring(
-  callback: (isOnline: boolean) => void
+  callback: (isOnline: boolean) => void,
 ): () => void {
   const handleOnline = () => callback(true);
   const handleOffline = () => callback(false);
 
-  window.addEventListener('online', handleOnline);
-  window.addEventListener('offline', handleOffline);
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
 
   // Return cleanup function
   return () => {
-    window.removeEventListener('online', handleOnline);
-    window.removeEventListener('offline', handleOffline);
+    window.removeEventListener("online", handleOnline);
+    window.removeEventListener("offline", handleOffline);
   };
 }
 
@@ -235,9 +299,10 @@ export function setupOnlineStatusMonitoring(
  */
 export function isStandalone(): boolean {
   return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true ||
-    document.referrer.includes('android-app://')
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (window.navigator as Navigator & { standalone?: boolean }).standalone ===
+      true ||
+    document.referrer.includes("android-app://")
   );
 }
 
@@ -246,7 +311,8 @@ export function isStandalone(): boolean {
  */
 export function canInstall(): boolean {
   // The beforeinstallprompt event is stored globally by the PWA hook
-  return !!(window as Window & { deferredPrompt?: BeforeInstallPromptEvent }).deferredPrompt;
+  return !!(window as Window & { deferredPrompt?: BeforeInstallPromptEvent })
+    .deferredPrompt;
 }
 
 /**
@@ -255,7 +321,7 @@ export function canInstall(): boolean {
 export interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
   readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
+    outcome: "accepted" | "dismissed";
     platform: string;
   }>;
   prompt(): Promise<void>;

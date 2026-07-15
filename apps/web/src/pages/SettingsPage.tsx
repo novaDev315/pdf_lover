@@ -1,6 +1,6 @@
 /**
  * Settings Page - Comprehensive settings management
- * Allows users to configure appearance, viewer, AI, processing, privacy, and shortcuts
+ * Allows users to configure appearance, viewer, AI, processing, data, and shortcuts
  */
 
 import * as React from 'react';
@@ -22,12 +22,14 @@ import {
   FileText,
   Trash2,
   Download,
+  Upload,
+  RotateCcw,
   Database,
   ChevronRight,
-  EyeOff,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Card,
   CardContent,
@@ -35,7 +37,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Progress } from '@/components/ui/progress';
 import {
@@ -47,6 +48,8 @@ import {
   type PageDisplayMode,
 } from '@/store/settings-store';
 import { cn, formatFileSize } from '@/lib/utils';
+import { db } from '@/lib/storage';
+import webPackage from '../../package.json';
 
 /**
  * Settings section navigation
@@ -147,6 +150,7 @@ function ToggleSwitch({ checked, onChange, label, description }: ToggleSwitchPro
       <button
         type="button"
         role="switch"
+        aria-label={label}
         aria-checked={checked}
         onClick={() => onChange(!checked)}
         className={cn(
@@ -191,6 +195,8 @@ function ColorPicker({ value, onChange }: ColorPickerProps) {
           type="button"
           onClick={() => onChange(color.value)}
           title={color.label}
+          aria-label={`${color.label} accent color`}
+          aria-pressed={value === color.value}
           className={cn(
             'w-8 h-8 rounded-full transition-transform',
             color.color,
@@ -271,29 +277,20 @@ const OCR_LANGUAGES = [
 /**
  * AI model options
  */
-const AI_MODELS = {
-  local: [
-    { value: 'Xenova/flan-t5-small', label: 'Flan-T5 Small (Fast)' },
-    { value: 'Xenova/flan-t5-base', label: 'Flan-T5 Base (Balanced)' },
-    { value: 'Xenova/distilbert-base-uncased', label: 'DistilBERT (Lightweight)' },
-  ],
-  openRouter: [
-    { value: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku' },
-    { value: 'anthropic/claude-3-sonnet', label: 'Claude 3 Sonnet' },
-    { value: 'openai/gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
-    { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini' },
-    { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
-  ],
-};
+const LOCAL_AI_MODELS = [
+  { value: 'Xenova/flan-t5-small', label: 'Flan-T5 Small (Fast)' },
+  { value: 'Xenova/flan-t5-base', label: 'Flan-T5 Base (Balanced)' },
+] as const;
 
 /**
  * Settings Page Component
  */
 export function SettingsPage() {
   const [activeSection, setActiveSection] = React.useState('appearance');
-  const [showApiKey, setShowApiKey] = React.useState(false);
   const [storageUsage, setStorageUsage] = React.useState<{ used: number; total: number } | null>(null);
+  const [dataActionStatus, setDataActionStatus] = React.useState<string | null>(null);
   const sectionRefs = React.useRef<Record<string, HTMLElement | null>>({});
+  const importInputRef = React.useRef<HTMLInputElement>(null);
 
   // Settings store
   const {
@@ -302,14 +299,11 @@ export function SettingsPage() {
     viewer,
     ai,
     processing,
-    privacy,
     setTheme,
     updateAppearanceSettings,
     updateViewerSettings,
     updateAISettings,
-    setApiKey,
     updateProcessingSettings,
-    updatePrivacySettings,
     resetAllSettings,
   } = useSettingsStore();
 
@@ -343,46 +337,49 @@ export function SettingsPage() {
   // Handle clear all data
   const handleClearData = async () => {
     if (window.confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-      // Clear IndexedDB
-      const databases = await window.indexedDB.databases();
-      for (const db of databases) {
-        if (db.name) {
-          window.indexedDB.deleteDatabase(db.name);
-        }
+      try {
+        await db.clearAllData();
+        localStorage.clear();
+        resetAllSettings();
+        window.location.reload();
+      } catch (error) {
+        setDataActionStatus(error instanceof Error ? error.message : 'Failed to clear PDFLover data');
       }
-      // Clear localStorage
-      localStorage.clear();
-      // Reset settings
-      resetAllSettings();
-      // Reload the page
-      window.location.reload();
     }
   };
 
   // Handle export data
-  const handleExportData = () => {
-    const data = {
-      settings: {
-        theme,
-        appearance,
-        viewer,
-        ai: { ...ai, openRouterApiKey: undefined }, // Don't export API key
-        processing,
-        privacy,
-      },
-      exportedAt: new Date().toISOString(),
-      version: '1.0.0',
-    };
+  const handleExportData = async () => {
+    try {
+      const data = await db.exportData();
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pdflover-archive-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setDataActionStatus('Archive exported successfully.');
+    } catch (error) {
+      setDataActionStatus(error instanceof Error ? error.message : 'Failed to export PDFLover data');
+    }
+  };
 
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `pdflover-settings-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const handleImportData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const archive = event.target.files?.[0];
+    event.target.value = '';
+    if (!archive) return;
+    if (!window.confirm('Replace current PDFLover data with this archive?')) return;
+
+    try {
+      await db.importData(await archive.text());
+      await useSettingsStore.persist.rehydrate();
+      window.location.reload();
+    } catch (error) {
+      setDataActionStatus(error instanceof Error ? error.message : 'Failed to import PDFLover data');
+    }
   };
 
   return (
@@ -631,77 +628,42 @@ export function SettingsPage() {
                   <p className="text-xs text-muted-foreground">
                     {ai.provider === 'local'
                       ? 'AI runs locally in your browser. No data is sent to external servers.'
-                      : 'Uses OpenRouter API for more powerful AI models. Requires API key.'}
+                      : 'Uses the server-configured OpenRouter connection. Document context is sent only when you choose cloud AI.'}
                   </p>
                 </div>
-
-                {/* OpenRouter API Key */}
-                {ai.provider === 'openrouter' && (
-                  <div className="space-y-3">
-                    <label className="text-sm font-medium text-foreground">OpenRouter API Key</label>
-                    <div className="flex gap-2">
-                      <div className="relative flex-1">
-                        <Input
-                          type={showApiKey ? 'text' : 'password'}
-                          value={ai.openRouterApiKey || ''}
-                          onChange={(e) => setApiKey(e.target.value || null)}
-                          placeholder="sk-or-v1-..."
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowApiKey(!showApiKey)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Get your API key from{' '}
-                      <a
-                        href="https://openrouter.ai/keys"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        openrouter.ai/keys
-                      </a>
-                    </p>
-                  </div>
-                )}
 
                 {/* Default Model */}
                 <div className="space-y-3">
                   <label className="text-sm font-medium text-foreground">Default Model</label>
-                  <div className="flex flex-wrap gap-2">
-                    {AI_MODELS[ai.provider === 'local' ? 'local' : 'openRouter'].map((model) => (
-                      <SelectButton
-                        key={model.value}
-                        value={model.value}
-                        label={model.label}
-                        selected={
-                          ai.provider === 'local'
-                            ? ai.localModelId === model.value
-                            : ai.openRouterModelId === model.value
-                        }
-                        onClick={() =>
-                          ai.provider === 'local'
-                            ? updateAISettings({ localModelId: model.value })
-                            : updateAISettings({ openRouterModelId: model.value })
-                        }
+                  {ai.provider === 'local' ? (
+                    <div className="flex flex-wrap gap-2">
+                      {LOCAL_AI_MODELS.map((model) => (
+                        <SelectButton
+                          key={model.value}
+                          value={model.value}
+                          label={model.label}
+                          selected={ai.localModelId === model.value}
+                          onClick={() => updateAISettings({ localModelId: model.value })}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Input
+                        value={ai.openRouterModelId}
+                        onChange={(event) => updateAISettings({ openRouterModelId: event.target.value })}
+                        placeholder="openrouter/auto"
                       />
-                    ))}
-                  </div>
+                      <p className="text-xs text-muted-foreground">
+                        Use <code>openrouter/auto</code> or enter an exact model slug from OpenRouter.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Auto-index Documents */}
-                <ToggleSwitch
-                  checked={ai.autoIndexDocuments}
-                  onChange={(checked) => updateAISettings({ autoIndexDocuments: checked })}
-                  label="Auto-Index Documents"
-                  description="Automatically index documents for AI search when opened"
-                />
+                <p className="text-sm text-muted-foreground">
+                  Document search indexes are created on demand when you ask a question.
+                </p>
               </CardContent>
             </Card>
             </section>
@@ -782,13 +744,9 @@ export function SettingsPage() {
                   </select>
                 </div>
 
-                {/* Auto-cleanup */}
-                <ToggleSwitch
-                  checked={processing.autoCleanupTempFiles}
-                  onChange={(checked) => updateProcessingSettings({ autoCleanupTempFiles: checked })}
-                  label="Auto-Cleanup Temp Files"
-                  description="Automatically remove temporary files after processing"
-                />
+                <p className="text-sm text-muted-foreground">
+                  Temporary processing files are always removed automatically; library files remain until you delete them.
+                </p>
               </CardContent>
             </Card>
             </section>
@@ -831,35 +789,36 @@ export function SettingsPage() {
                     <Download className="h-4 w-4 mr-2" />
                     Export All Data
                   </Button>
+                  <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Import Archive
+                  </Button>
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="sr-only"
+                    onChange={handleImportData}
+                  />
+                  <Button variant="outline" onClick={resetAllSettings}>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset Settings
+                  </Button>
                   <Button variant="destructive" onClick={handleClearData}>
                     <Trash2 className="h-4 w-4 mr-2" />
                     Clear All Data
                   </Button>
                 </div>
 
-                {/* Analytics */}
-                <ToggleSwitch
-                  checked={privacy.enableAnalytics}
-                  onChange={(checked) => updatePrivacySettings({ enableAnalytics: checked })}
-                  label="Enable Analytics"
-                  description="Help improve PDFLover by sending anonymous usage data"
-                />
+                {dataActionStatus && (
+                  <p role="status" className="text-sm text-muted-foreground">
+                    {dataActionStatus}
+                  </p>
+                )}
 
-                {/* Crash Reporting */}
-                <ToggleSwitch
-                  checked={privacy.enableCrashReporting}
-                  onChange={(checked) => updatePrivacySettings({ enableCrashReporting: checked })}
-                  label="Enable Crash Reporting"
-                  description="Automatically send crash reports to help fix bugs"
-                />
-
-                {/* Clear on Exit */}
-                <ToggleSwitch
-                  checked={privacy.clearDataOnExit}
-                  onChange={(checked) => updatePrivacySettings({ clearDataOnExit: checked })}
-                  label="Clear Data on Exit"
-                  description="Automatically clear all data when closing the app"
-                />
+                <p className="text-sm text-muted-foreground">
+                  PDFLover does not send analytics or crash reports. Cloud AI is used only when you select an OpenRouter model, through the backend proxy.
+                </p>
               </CardContent>
             </Card>
             </section>
@@ -886,9 +845,6 @@ export function SettingsPage() {
                     />
                   ))}
                 </div>
-                <p className="mt-4 text-xs text-muted-foreground">
-                  Keyboard shortcut customization coming soon
-                </p>
               </CardContent>
             </Card>
             </section>
@@ -910,11 +866,11 @@ export function SettingsPage() {
                 <div className="space-y-2">
                   <h3 className="text-lg font-semibold text-foreground">PDFLover</h3>
                   <p className="text-sm text-muted-foreground">
-                    Version 1.0.0
+                    Version {webPackage.version}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    A privacy-first, local-first PDF processing platform.
-                    All PDF operations run in your browser - no server uploads required.
+                    A local-first PDF processing platform. Browser-capable operations stay local;
+                    server-only operations and cloud AI run only when explicitly selected.
                   </p>
                 </div>
 
@@ -922,7 +878,7 @@ export function SettingsPage() {
                 <div className="flex flex-wrap gap-3">
                   <Button variant="outline" asChild>
                     <a
-                      href="https://github.com/pdflover/pdflover"
+                      href="https://github.com/novaDev315/pdf_lover"
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -933,7 +889,7 @@ export function SettingsPage() {
                   </Button>
                   <Button variant="outline" asChild>
                     <a
-                      href="https://pdflover.app/docs"
+                      href="https://github.com/novaDev315/pdf_lover#readme"
                       target="_blank"
                       rel="noopener noreferrer"
                     >

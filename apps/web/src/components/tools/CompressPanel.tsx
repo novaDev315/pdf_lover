@@ -36,6 +36,7 @@ import {
 } from '@/lib/utils'
 import { compressPDF, estimateCompression } from '@pdflover/pdf-core'
 import type { ProgressInfo, CompressionLevel } from '@pdflover/shared'
+import { useSettingsStore } from '@/store/settings-store'
 
 /**
  * Compression level configuration
@@ -89,8 +90,16 @@ export interface CompressPanelProps {
  * - Download compressed PDF
  */
 export function CompressPanel({ className }: CompressPanelProps) {
+  const defaultCompressionLevel = useSettingsStore(
+    (state) => state.processing.defaultCompressionLevel,
+  )
   const [file, setFile] = React.useState<File | null>(null)
-  const [compressionLevel, setCompressionLevel] = React.useState<number>(1) // Index in COMPRESSION_LEVELS
+  const [compressionLevel, setCompressionLevel] = React.useState<number>(() => {
+    const index = COMPRESSION_LEVELS.findIndex(
+      (configuration) => configuration.level === defaultCompressionLevel,
+    )
+    return index >= 0 ? index : 1
+  })
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
   const [progressStage, setProgressStage] = React.useState('')

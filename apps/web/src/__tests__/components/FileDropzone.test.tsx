@@ -167,7 +167,7 @@ describe('FileDropzone', () => {
 
   describe('file rejection', () => {
     it('should reject non-PDF files', async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ applyAccept: false });
       render(
         <FileDropzone
           onFilesAccepted={onFilesAccepted}
@@ -206,7 +206,7 @@ describe('FileDropzone', () => {
     });
 
     it('should display error message on rejection', async () => {
-      const user = userEvent.setup();
+      const user = userEvent.setup({ applyAccept: false });
       render(
         <FileDropzone
           onFilesAccepted={onFilesAccepted}

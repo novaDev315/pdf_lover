@@ -4,6 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { Toaster } from '@/components/ui/toaster'
 import { cn } from '@/lib/utils'
+import { selectEffectiveTheme, useSettingsStore } from '@/store/settings-store'
 
 export interface LayoutProps {
   /** Content to render in the main area */
@@ -36,29 +37,25 @@ export function Layout({
   onNavItemClick,
   className,
 }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = React.useState(false)
+  const sidebarOpenByDefault = useSettingsStore((state) => state.appearance.sidebarOpen)
+  const theme = useSettingsStore(selectEffectiveTheme)
+  const setTheme = useSettingsStore((state) => state.setTheme)
+  const [sidebarOpen, setSidebarOpen] = React.useState(sidebarOpenByDefault)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false)
-  const [theme, setTheme] = React.useState<'light' | 'dark'>('light')
-
-  // Initialize theme from localStorage or system preference
-  React.useEffect(() => {
-    const stored = localStorage.getItem('pdflover-theme')
-    if (stored === 'dark' || stored === 'light') {
-      setTheme(stored)
-    } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setTheme('dark')
-    }
-  }, [])
-
-  // Apply theme to document
-  React.useEffect(() => {
-    document.documentElement.classList.remove('light', 'dark')
-    document.documentElement.classList.add(theme)
-    localStorage.setItem('pdflover-theme', theme)
-  }, [theme])
 
   const handleThemeToggle = React.useCallback(() => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))
+    setTheme(theme === 'dark' ? 'light' : 'dark')
+  }, [setTheme, theme])
+
+  React.useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'b') {
+        event.preventDefault()
+        setSidebarOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
   }, [])
 
   const handleNavItemClick = React.useCallback(

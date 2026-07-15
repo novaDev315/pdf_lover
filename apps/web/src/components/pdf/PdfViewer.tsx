@@ -12,6 +12,7 @@ import { SearchPanel } from './SearchPanel';
 import { type ZoomMode } from './ZoomControls';
 import { cn } from '@/lib/utils';
 import { downloadBlob, arrayBufferToBlob } from '@/lib/utils';
+import { useSettingsStore } from '@/store/settings-store';
 
 /**
  * Keyboard shortcut bindings
@@ -70,7 +71,7 @@ export interface PdfViewerProps {
 /**
  * Page component for rendering individual PDF pages
  */
-interface PageCanvasProps {
+export interface PdfPageCanvasProps {
   pdfDocument: ReturnType<typeof usePdfDocument>['pdfDocument'];
   pageNumber: number;
   scale: number;
@@ -81,7 +82,7 @@ interface PageCanvasProps {
   currentMatchIndex?: number;
 }
 
-function PageCanvas({
+export function PdfPageCanvas({
   pdfDocument,
   pageNumber,
   scale,
@@ -90,7 +91,7 @@ function PageCanvas({
   onRender,
   searchResults = [],
   currentMatchIndex = -1,
-}: PageCanvasProps) {
+}: PdfPageCanvasProps) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const highlightCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const [isRendering, setIsRendering] = React.useState(false);
@@ -269,9 +270,9 @@ export function PdfViewer({
   url,
   arrayBuffer,
   initialPage = 1,
-  initialZoom = 1.0,
+  initialZoom,
   showToolbar = true,
-  showThumbnails = true,
+  showThumbnails,
   enableReorder = false,
   enableSearch = true,
   onLoad,
@@ -281,6 +282,15 @@ export function PdfViewer({
   onReorder,
   className,
 }: PdfViewerProps) {
+  const viewerSettings = useSettingsStore((state) => state.viewer);
+  const resolvedInitialZoom = initialZoom ?? viewerSettings.defaultZoom;
+  const resolvedShowThumbnails = showThumbnails ?? viewerSettings.showThumbnails;
+  const initialZoomMode: ZoomMode = viewerSettings.pageFit === 'width'
+    ? 'fit-width'
+    : viewerSettings.pageFit === 'page'
+      ? 'fit-page'
+      : 'custom';
+
   // PDF document hook
   const {
     pdfDocument,
@@ -301,12 +311,12 @@ export function PdfViewer({
 
   // State
   const [currentPage, setCurrentPage] = React.useState(initialPage);
-  const [zoom, setZoom] = React.useState(initialZoom);
-  const [zoomMode, setZoomMode] = React.useState<ZoomMode>('custom');
+  const [zoom, setZoom] = React.useState(resolvedInitialZoom);
+  const [zoomMode, setZoomMode] = React.useState<ZoomMode>(initialZoomMode);
   const [rotation, setRotation] = React.useState<0 | 90 | 180 | 270>(0);
-  const [activeTool, setActiveTool] = React.useState<ToolType>('select');
+  const [activeTool, setActiveTool] = React.useState<ToolType>(viewerSettings.defaultTool);
   const [isFullscreen, setIsFullscreen] = React.useState(false);
-  const [showThumbnailSidebar] = React.useState(showThumbnails);
+  const [showThumbnailSidebar, setShowThumbnailSidebar] = React.useState(resolvedShowThumbnails);
   const [visiblePages, setVisiblePages] = React.useState<Set<number>>(new Set([initialPage]));
 
   // Refs
@@ -314,6 +324,10 @@ export function PdfViewer({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
   const pageRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
   const pdfDataRef = React.useRef<ArrayBuffer | null>(null);
+
+  React.useEffect(() => {
+    setShowThumbnailSidebar(resolvedShowThumbnails);
+  }, [resolvedShowThumbnails]);
 
   // Ref for page change callback (used by search hook)
   const handlePageChangeRef = React.useRef<(page: number) => void>(() => {});
@@ -396,6 +410,7 @@ export function PdfViewer({
   // Recalculate fit zoom on window resize
   React.useEffect(() => {
     if (zoomMode !== 'custom') {
+      calculateFitZoom(zoomMode);
       const handleResize = () => {
         calculateFitZoom(zoomMode);
       };
@@ -403,7 +418,7 @@ export function PdfViewer({
       window.addEventListener('resize', handleResize);
       return () => window.removeEventListener('resize', handleResize);
     }
-  }, [zoomMode, calculateFitZoom]);
+  }, [pdfDocument, zoomMode, calculateFitZoom]);
 
   // Handle page change
   const handlePageChange = React.useCallback(
@@ -547,7 +562,13 @@ export function PdfViewer({
       const key = e.key;
 
       // Page navigation
-      if (KEYBOARD_SHORTCUTS.nextPage.includes(key)) {
+      if (key === 'Home') {
+        e.preventDefault();
+        handlePageChange(1);
+      } else if (key === 'End') {
+        e.preventDefault();
+        handlePageChange(pdfDocument?.numPages ?? currentPage);
+      } else if (KEYBOARD_SHORTCUTS.nextPage.includes(key)) {
         e.preventDefault();
         handlePageChange(currentPage + 1);
       } else if (KEYBOARD_SHORTCUTS.prevPage.includes(key)) {
@@ -561,6 +582,18 @@ export function PdfViewer({
       } else if (KEYBOARD_SHORTCUTS.zoomOut.includes(key) && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         handleZoomChange(Math.max(zoom - 0.25, 0.25));
+      }
+      else if (key === '1' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleZoomModeChange('fit-width');
+      }
+      else if (key === '0' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleZoomModeChange('fit-page');
+      }
+      else if (key.toLowerCase() === 't' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowThumbnailSidebar((visible) => !visible);
       }
       // Fullscreen
       else if (KEYBOARD_SHORTCUTS.fullscreen.includes(key) && !e.ctrlKey && !e.metaKey) {
@@ -591,7 +624,12 @@ export function PdfViewer({
         setActiveTool('hand');
       } else if (KEYBOARD_SHORTCUTS.textTool.includes(key) && !e.ctrlKey && !e.metaKey) {
         setActiveTool('text');
-      } else if (KEYBOARD_SHORTCUTS.highlightTool.includes(key) && !e.ctrlKey && !e.metaKey) {
+      } else if (
+        viewerSettings.enableAnnotations &&
+        KEYBOARD_SHORTCUTS.highlightTool.includes(key) &&
+        !e.ctrlKey &&
+        !e.metaKey
+      ) {
         setActiveTool('highlight');
       }
     };
@@ -607,6 +645,9 @@ export function PdfViewer({
     handleZoomChange,
     handleToggleFullscreen,
     handleDownload,
+    handleZoomModeChange,
+    pdfDocument,
+    viewerSettings.enableAnnotations,
   ]);
 
   // Render loading state
@@ -668,6 +709,9 @@ export function PdfViewer({
   }
 
   const totalPages = pdfDocument.numPages;
+  const pageNumbers = viewerSettings.pageDisplay === 'single'
+    ? [currentPage]
+    : Array.from({ length: totalPages }, (_, index) => index + 1);
 
   return (
     <div
@@ -687,6 +731,7 @@ export function PdfViewer({
           zoomMode={zoomMode}
           activeTool={activeTool}
           isFullscreen={isFullscreen}
+          enableAnnotations={viewerSettings.enableAnnotations}
           onPageChange={handlePageChange}
           onZoomChange={handleZoomChange}
           onZoomModeChange={handleZoomModeChange}
@@ -745,7 +790,7 @@ export function PdfViewer({
           )}
         >
           <div className="flex flex-col items-center gap-4 p-6">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+            {pageNumbers.map(
               (pageNumber) => (
                 <div
                   key={pageNumber}
@@ -759,12 +804,12 @@ export function PdfViewer({
                   data-page={pageNumber}
                   className="scroll-mt-6"
                 >
-                  <PageCanvas
+                  <PdfPageCanvas
                     pdfDocument={pdfDocument}
                     pageNumber={pageNumber}
                     scale={zoom}
                     rotation={rotation}
-                    isVisible={visiblePages.has(pageNumber)}
+                    isVisible={viewerSettings.pageDisplay === 'single' || visiblePages.has(pageNumber)}
                     searchResults={search.matchesOnPage(pageNumber)}
                     currentMatchIndex={search.currentMatchIndex}
                   />

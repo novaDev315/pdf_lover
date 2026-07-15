@@ -131,7 +131,7 @@ export function InstallPrompt({
               Install PDFLover
             </h3>
             <p className="mt-1 text-sm text-surface-600 dark:text-surface-400">
-              Install the app for faster access and offline support. Your files stay private on your device.
+              Install the app for faster access and offline support for browser-native tools.
             </p>
             <div className="mt-3 flex gap-2">
               <Button

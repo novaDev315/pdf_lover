@@ -51,6 +51,9 @@ export function FileDropzone({
   children,
 }: FileDropzoneProps) {
   const [error, setError] = React.useState<string | null>(null)
+  const pdfOnly = Object.keys(accept).every((type) =>
+    type === 'application/pdf' || type === 'application/x-pdf'
+  )
 
   const onDrop = React.useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
@@ -81,6 +84,7 @@ export function FileDropzone({
       if (acceptedFiles.length > 0) {
         // Additional validation for PDF files
         const validFiles = acceptedFiles.filter((file) => {
+          if (!pdfOnly) return true
           if (!isPdfFile(file)) {
             setError((prev) =>
               prev
@@ -97,7 +101,7 @@ export function FileDropzone({
         }
       }
     },
-    [maxFiles, maxSize, onFilesAccepted, onFilesRejected]
+    [maxFiles, maxSize, onFilesAccepted, onFilesRejected, pdfOnly]
   )
 
   const {
@@ -115,6 +119,22 @@ export function FileDropzone({
     disabled,
   })
 
+  const validateInputCapture = React.useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      if (!pdfOnly || !event.target.files) return
+      const invalid = Array.from(event.target.files).filter((file) => !isPdfFile(file))
+      if (invalid.length === 0) return
+      event.stopPropagation()
+      const rejections: FileRejection[] = invalid.map((file) => ({
+        file,
+        errors: [{ code: 'file-invalid-type', message: 'Invalid file type (PDF only)' }],
+      }))
+      setError(rejections.map((item) => `${item.file.name}: Invalid file type (PDF only)`).join('\n'))
+      onFilesRejected?.(rejections)
+    },
+    [onFilesRejected, pdfOnly],
+  )
+
   return (
     <div className={cn('w-full', className)}>
       <div
@@ -129,7 +149,11 @@ export function FileDropzone({
           error && 'border-red-500'
         )}
       >
-        <input {...getInputProps()} />
+        <input
+          {...getInputProps()}
+          disabled={disabled}
+          onChangeCapture={validateInputCapture}
+        />
 
         {children ? (
           children
@@ -148,7 +172,11 @@ export function FileDropzone({
               />
             )}
 
-            <div className="space-y-2">
+            <div className={cn(
+              'space-y-2',
+              disabled && 'cursor-not-allowed opacity-50',
+              isDragActive && 'border-primary',
+            )}>
               <p className="text-lg font-medium">
                 {isDragActive
                   ? isDragReject
@@ -163,7 +191,7 @@ export function FileDropzone({
 
             <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
               <span className="rounded-full bg-muted px-2 py-1">
-                PDF files only
+                Accepted: .pdf
               </span>
               <span className="rounded-full bg-muted px-2 py-1">
                 Max {formatFileSize(maxSize)}

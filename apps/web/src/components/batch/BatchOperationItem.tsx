@@ -4,6 +4,7 @@
  */
 
 import * as React from 'react';
+import JSZip from 'jszip';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -23,6 +24,8 @@ import {
   XCircle,
   Clock,
   AlertCircle,
+  Crop,
+  Maximize2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -33,7 +36,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { cn, formatFileSize, downloadBlob, arrayBufferToBlob } from '@/lib/utils';
+import { cn, formatFileSize, downloadBlob } from '@/lib/utils';
 import type {
   BatchOperation,
   BatchOperationType,
@@ -52,6 +55,9 @@ function getOperationIcon(type: BatchOperationType) {
     split: <Scissors className="h-4 w-4" />,
     ocr: <ScanText className="h-4 w-4" />,
     security: <Lock className="h-4 w-4" />,
+    crop: <Crop className="h-4 w-4" />,
+    trim: <Crop className="h-4 w-4" />,
+    resize: <Maximize2 className="h-4 w-4" />,
   };
   return icons[type];
 }
@@ -68,6 +74,9 @@ function getOperationColor(type: BatchOperationType): string {
     split: 'text-green-500 bg-green-50 dark:bg-green-950',
     ocr: 'text-amber-500 bg-amber-50 dark:bg-amber-950',
     security: 'text-red-500 bg-red-50 dark:bg-red-950',
+    crop: 'text-teal-500 bg-teal-50 dark:bg-teal-950',
+    trim: 'text-lime-600 bg-lime-50 dark:bg-lime-950',
+    resize: 'text-pink-500 bg-pink-50 dark:bg-pink-950',
   };
   return colors[type];
 }
@@ -125,6 +134,9 @@ function getTypeLabel(type: BatchOperationType): string {
     split: 'Split PDF',
     ocr: 'OCR Extract',
     security: 'Add Security',
+    crop: 'Crop Pages',
+    trim: 'Trim Margins',
+    resize: 'Resize Pages',
   };
   return labels[type];
 }
@@ -186,12 +198,21 @@ export const BatchOperationItem = React.memo(function BatchOperationItem({
   /**
    * Handle download result
    */
-  const handleDownload = React.useCallback(() => {
-    if (operation.result?.data) {
-      const blob = arrayBufferToBlob(operation.result.data, 'application/pdf');
-      const filename = operation.result.filename ?? `${operation.type}_result.pdf`;
-      downloadBlob(blob, filename);
+  const handleDownload = React.useCallback(async () => {
+    const artifacts = operation.result?.artifacts;
+    if (!artifacts?.length) return;
+
+    if (artifacts.length === 1) {
+      const artifact = artifacts[0]!;
+      downloadBlob(new Blob([artifact.data], { type: artifact.mediaType }), artifact.filename);
+      return;
     }
+
+    const zip = new JSZip();
+    for (const artifact of artifacts) {
+      zip.file(artifact.filename, artifact.data);
+    }
+    downloadBlob(await zip.generateAsync({ type: 'blob' }), `${operation.type}_results.zip`);
   }, [operation]);
 
   if (compact) {
@@ -358,7 +379,7 @@ export const BatchOperationItem = React.memo(function BatchOperationItem({
 
       {/* Actions */}
       <div className="mt-3 flex items-center gap-2">
-        {operation.status === 'completed' && operation.result?.data && (
+        {operation.status === 'completed' && operation.result?.artifacts?.length && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

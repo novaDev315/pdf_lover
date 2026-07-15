@@ -202,6 +202,7 @@ export function HistoryPanel({
     historyCount,
     undoLastOperation,
     redoLastOperation,
+    restoreHistoryEntry,
     clearHistory,
   } = useOperationHistory({
     showToasts: true,
@@ -215,12 +216,10 @@ export function HistoryPanel({
   }, [collapsed, onCollapseChange]);
 
   const handleRevert = React.useCallback(
-    async (_entry: HistoryEntry) => {
-      // For now, just undo to previous state
-      // In a full implementation, this would revert to the specific entry
-      await undoLastOperation();
+    async (entry: HistoryEntry) => {
+      await restoreHistoryEntry(entry);
     },
-    [undoLastOperation]
+    [restoreHistoryEntry]
   );
 
   const recentEntries = React.useMemo(() => {

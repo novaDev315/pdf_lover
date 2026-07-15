@@ -242,7 +242,7 @@ export function getOperationIcon(
   className?: string
 ): React.ReactNode {
   const config = getOperationConfig(type);
-  return React.cloneElement(config.icon as React.ReactElement, {
+  return React.cloneElement(config.icon as React.ReactElement<{ className?: string }>, {
     className: cn('h-4 w-4', className),
   });
 }

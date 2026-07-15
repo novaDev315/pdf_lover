@@ -46,6 +46,7 @@ import {
 import { convertPDF, extractText, getSupportedFormats } from '@pdflover/pdf-core'
 import type { ProgressInfo, ConvertOutputFormat, ImageQuality } from '@pdflover/shared'
 import type { OCRLanguageCode } from '@pdflover/pdf-core'
+import { useSettingsStore } from '@/store/settings-store'
 
 /**
  * Conversion mode
@@ -120,18 +121,29 @@ export interface ConvertPanelProps {
  * - Download converted files
  */
 export function ConvertPanel({ className }: ConvertPanelProps) {
+  const processingSettings = useSettingsStore((state) => state.processing)
   const [mode, setMode] = React.useState<ConversionMode>('pdf-to-image')
   const [file, setFile] = React.useState<File | null>(null)
   const [fileBuffer, setFileBuffer] = React.useState<ArrayBuffer | null>(null)
   const [imageFiles, setImageFiles] = React.useState<File[]>([])
   const [pageCount, setPageCount] = React.useState<number>(0)
   const [outputFormat, setOutputFormat] = React.useState<ConvertOutputFormat>('png')
-  const [qualityLevel, setQualityLevel] = React.useState<number>(1) // Index in QUALITY_LEVELS
+  const [qualityLevel, setQualityLevel] = React.useState<number>(() => {
+    const index = QUALITY_LEVELS.findIndex(
+      (configuration) => configuration.level === processingSettings.defaultImageQuality,
+    )
+    return index >= 0 ? index : 1
+  })
   const [isProcessing, setIsProcessing] = React.useState(false)
   const [progress, setProgress] = React.useState(0)
   const [progressStage, setProgressStage] = React.useState('')
   const [useOCRForText, setUseOCRForText] = React.useState(false)
-  const [ocrLanguages, setOcrLanguages] = React.useState<OCRLanguageCode[]>(['eng'])
+  const [ocrLanguages, setOcrLanguages] = React.useState<OCRLanguageCode[]>(() => {
+    const configured = OCR_LANGUAGE_OPTIONS.find(
+      (language) => language.code === processingSettings.ocrLanguage,
+    )?.code
+    return [configured ?? 'eng']
+  })
   const [isScannedPdf, setIsScannedPdf] = React.useState<boolean | null>(null)
   const { toast } = useToast()
 
@@ -292,6 +304,7 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
         document: buffer,
         outputFormat,
         imageQuality: currentQuality.level,
+        dpi: processingSettings.defaultImageDpi,
         onProgress: handleProgress,
       })
 
@@ -335,7 +348,7 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
       setProgress(0)
       setProgressStage('')
     }
-  }, [file, outputFormat, currentQuality.level, handleProgress, toast])
+  }, [file, outputFormat, currentQuality.level, processingSettings.defaultImageDpi, handleProgress, toast])
 
   /**
    * Convert images to PDF

@@ -38,9 +38,7 @@ export type {
 export {
   useSettingsStore,
   selectEffectiveTheme,
-  selectHasApiKey,
   selectCurrentModelId,
-  selectCloudEnabled,
 } from './settings-store';
 export type {
   SettingsState,
@@ -50,7 +48,6 @@ export type {
   ViewerSettings,
   AISettings,
   ProcessingSettings,
-  PrivacySettings,
 } from './settings-store';
 
 // Chat Store

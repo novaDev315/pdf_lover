@@ -15,6 +15,8 @@ import {
   type HistoryEntry,
 } from '@/store/history-store';
 import { useToast } from './use-toast';
+import { db } from '@/lib/storage';
+import { useFileStore } from '@/store/file-store';
 
 /**
  * Options for recording an operation
@@ -84,6 +86,8 @@ export interface UseOperationHistoryReturn {
   undoLastOperation: () => Promise<UndoResult>;
   /** Redo the last undone operation */
   redoLastOperation: () => Promise<RedoResult>;
+  /** Restore the PDF result captured by a specific history entry. */
+  restoreHistoryEntry: (entry: HistoryEntry) => Promise<boolean>;
   /** Clear all history */
   clearHistory: () => void;
   /** Get recent operations */
@@ -129,6 +133,47 @@ async function fetchBlobFromUrl(url: string | null | undefined): Promise<Blob | 
     console.error('Failed to fetch blob from URL:', error);
     return null;
   }
+}
+
+function getVersionId(entry: HistoryEntry, key: 'beforeVersionId' | 'afterVersionId'): string | undefined {
+  const value = entry.metadata?.[key];
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+async function resolveDocumentState(
+  entry: HistoryEntry,
+  state: 'before' | 'after',
+): Promise<Blob | null> {
+  const transientUrl = state === 'before' ? entry.before : entry.after;
+  const transientBlob = await fetchBlobFromUrl(transientUrl);
+  if (transientBlob) return transientBlob;
+
+  const documentId = entry.documentIds?.length === 1 ? entry.documentIds[0] : undefined;
+  const versionId = getVersionId(
+    entry,
+    state === 'before' ? 'beforeVersionId' : 'afterVersionId',
+  );
+  if (!documentId || !versionId) return null;
+  return (await db.getDocumentBytes(documentId, versionId)) ?? null;
+}
+
+async function applyDocumentState(blob: Blob | null, entry: HistoryEntry, label: string): Promise<boolean> {
+  const documentId = entry.documentIds?.length === 1 ? entry.documentIds[0] : undefined;
+  if (!blob || !documentId) return false;
+
+  const version = await db.createDocumentVersion(documentId, blob, {
+    source: 'local-operation',
+    label,
+  });
+  useFileStore.getState().updateFile(documentId, {
+    currentVersionId: version.id,
+    fileSize: blob.size,
+    status: 'ready',
+  });
+  window.dispatchEvent(new CustomEvent('pdflover:document-version-restored', {
+    detail: { documentId, blob, versionId: version.id },
+  }));
+  return true;
 }
 
 /**
@@ -185,8 +230,8 @@ export function useOperationHistory(
   const isRecordingEnabled = useHistoryStore((state) => state.isRecordingEnabled);
 
   // Computed selectors
-  const canUndo = useHistoryStore(selectCanUndo);
-  const canRedo = useHistoryStore(selectCanRedo);
+  const storeCanUndo = useHistoryStore(selectCanUndo);
+  const storeCanRedo = useHistoryStore(selectCanRedo);
   const historyCount = useHistoryStore(selectHistoryCount);
   const undoCount = useHistoryStore(selectUndoAvailable);
   const redoCount = useHistoryStore(selectRedoAvailable);
@@ -253,7 +298,25 @@ export function useOperationHistory(
       return { success: false, entry: null, beforeBlob: null };
     }
 
-    const beforeBlob = await fetchBlobFromUrl(entry.before);
+    const beforeBlob = await resolveDocumentState(entry, 'before');
+
+    try {
+      const applied = await applyDocumentState(beforeBlob, entry, `Undo: ${entry.description}`);
+      if (!applied) {
+        redo();
+        throw new Error('This operation is not linked to a restorable library document');
+      }
+    } catch (error) {
+      if (showToasts) {
+        toast({
+          title: 'Undo failed',
+          description: error instanceof Error ? error.message : 'Could not restore the prior PDF version',
+          variant: 'destructive',
+          duration: 3000,
+        });
+      }
+      return { success: false, entry, beforeBlob: null };
+    }
 
     if (showToasts) {
       toast({
@@ -264,7 +327,7 @@ export function useOperationHistory(
     }
 
     return { success: true, entry, beforeBlob };
-  }, [undo, showToasts, toast]);
+  }, [redo, undo, showToasts, toast]);
 
   /**
    * Redo the last undone operation
@@ -284,7 +347,25 @@ export function useOperationHistory(
       return { success: false, entry: null, afterBlob: null };
     }
 
-    const afterBlob = await fetchBlobFromUrl(entry.after);
+    const afterBlob = await resolveDocumentState(entry, 'after');
+
+    try {
+      const applied = await applyDocumentState(afterBlob, entry, `Redo: ${entry.description}`);
+      if (!applied) {
+        undo();
+        throw new Error('This operation is not linked to a restorable library document');
+      }
+    } catch (error) {
+      if (showToasts) {
+        toast({
+          title: 'Redo failed',
+          description: error instanceof Error ? error.message : 'Could not restore the PDF version',
+          variant: 'destructive',
+          duration: 3000,
+        });
+      }
+      return { success: false, entry, afterBlob: null };
+    }
 
     if (showToasts) {
       toast({
@@ -295,7 +376,44 @@ export function useOperationHistory(
     }
 
     return { success: true, entry, afterBlob };
-  }, [redo, showToasts, toast]);
+  }, [redo, undo, showToasts, toast]);
+
+  const restoreHistoryEntry = useCallback(async (entry: HistoryEntry): Promise<boolean> => {
+    const blob =
+      (await resolveDocumentState(entry, 'after')) ??
+      (await resolveDocumentState(entry, 'before'));
+    try {
+      const restored = await applyDocumentState(blob, entry, `Restored: ${entry.description}`);
+      if (!restored) throw new Error('No reload-safe document state is available for this entry');
+      if (showToasts) {
+        toast({ title: 'Version restored', description: entry.description, duration: 2000 });
+      }
+      return true;
+    } catch (error) {
+      if (showToasts) {
+        toast({
+          title: 'Restore failed',
+          description: error instanceof Error ? error.message : 'Could not restore this version',
+          variant: 'destructive',
+          duration: 3000,
+        });
+      }
+      return false;
+    }
+  }, [showToasts, toast]);
+
+  const currentEntry = currentIndex >= 0 ? history[currentIndex] : undefined;
+  const nextEntry = currentIndex < history.length - 1 ? history[currentIndex + 1] : undefined;
+  const canUndo = Boolean(
+    storeCanUndo &&
+      currentEntry?.documentIds?.length === 1 &&
+      (currentEntry.before || getVersionId(currentEntry, 'beforeVersionId')),
+  );
+  const canRedo = Boolean(
+    storeCanRedo &&
+      nextEntry?.documentIds?.length === 1 &&
+      (nextEntry.after || getVersionId(nextEntry, 'afterVersionId')),
+  );
 
   /**
    * Clear all history
@@ -366,6 +484,7 @@ export function useOperationHistory(
     recordOperation,
     undoLastOperation,
     redoLastOperation,
+    restoreHistoryEntry,
     clearHistory,
     getRecentOperations,
     canUndo,

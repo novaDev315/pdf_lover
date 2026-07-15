@@ -115,8 +115,8 @@ export function ResizePanel({ className, initialFile, onComplete }: ResizePanelP
   const [unit, setUnit] = React.useState<DimensionUnit>('mm')
 
   // Custom dimensions (stored in points)
-  const [customWidth, setCustomWidth] = React.useState(PAGE_SIZES.A4.width)
-  const [customHeight, setCustomHeight] = React.useState(PAGE_SIZES.A4.height)
+  const [customWidth, setCustomWidth] = React.useState<number>(PAGE_SIZES.A4.width)
+  const [customHeight, setCustomHeight] = React.useState<number>(PAGE_SIZES.A4.height)
 
   // Options
   const [preserveAspectRatio, setPreserveAspectRatio] = React.useState(true)

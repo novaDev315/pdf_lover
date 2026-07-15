@@ -365,7 +365,7 @@ export function MessageBubble({
 }
 
 /**
- * Streaming message placeholder
+ * Streaming message with an active cursor
  */
 export function StreamingMessage({
   content,

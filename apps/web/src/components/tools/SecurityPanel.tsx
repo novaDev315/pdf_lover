@@ -29,16 +29,15 @@ import {
   cn,
   formatFileSize,
   downloadBlob,
-  arrayBufferToBlob,
 } from '@/lib/utils'
 import {
-  encryptPDF,
-  decryptPDF,
   getSecurityInfo,
   type EncryptionLevel,
   type PDFPermissions,
+  type PDFSecurityInfo,
 } from '@pdflover/pdf-core'
 import type { ProgressInfo } from '@pdflover/shared'
+import { runServerPdfOperation } from '@/lib/api'
 
 /**
  * Checkbox component for permissions
@@ -132,11 +131,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
   })
 
   // Security info
-  const [securityInfo, setSecurityInfo] = React.useState<{
-    isEncrypted: boolean
-    hasUserPassword: boolean
-    hasOwnerPassword: boolean
-  } | null>(null)
+  const [securityInfo, setSecurityInfo] = React.useState<PDFSecurityInfo | null>(null)
 
   /**
    * Handle file selection
@@ -215,24 +210,24 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
     setProgressStage('Starting encryption...')
 
     try {
-      const buffer = await file.arrayBuffer()
-      const result = await encryptPDF({
-        document: buffer,
+      const [result] = await runServerPdfOperation({
+        operation: 'pdf.encrypt',
+        file,
+        options: {
         userPassword: userPassword || undefined,
         ownerPassword,
         encryptionLevel,
         permissions,
+        },
         onProgress: handleProgress,
       })
 
-      if (result.success && result.data) {
-        const blob = arrayBufferToBlob(result.data, 'application/pdf')
-        const filename = file.name.replace('.pdf', '_protected.pdf')
-        downloadBlob(blob, filename)
+      if (result) {
+        downloadBlob(new Blob([result.data], { type: result.mediaType }), result.filename)
 
         toast({
           title: 'Encryption complete',
-          description: `Successfully protected ${file.name} (${formatFileSize(result.processedSize ?? 0)})`,
+          description: `Successfully protected ${file.name} (${formatFileSize(result.data.byteLength)})`,
         })
 
         // Reset form
@@ -240,9 +235,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
         setUserPassword('')
         setOwnerPassword('')
         setSecurityInfo(null)
-      } else {
-        throw new Error(result.error ?? 'Failed to encrypt PDF')
-      }
+      } else throw new Error('The server returned no encrypted PDF')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unexpected error occurred'
       toast({
@@ -284,17 +277,15 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
     setProgressStage('Starting decryption...')
 
     try {
-      const buffer = await file.arrayBuffer()
-      const result = await decryptPDF({
-        document: buffer,
-        password: decryptPassword,
+      const [result] = await runServerPdfOperation({
+        operation: 'pdf.decrypt',
+        file,
+        options: { userPassword: decryptPassword },
         onProgress: handleProgress,
       })
 
-      if (result.success && result.data) {
-        const blob = arrayBufferToBlob(result.data, 'application/pdf')
-        const filename = file.name.replace('.pdf', '_unlocked.pdf')
-        downloadBlob(blob, filename)
+      if (result) {
+        downloadBlob(new Blob([result.data], { type: result.mediaType }), result.filename)
 
         toast({
           title: 'Decryption complete',
@@ -305,9 +296,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
         setFile(null)
         setDecryptPassword('')
         setSecurityInfo(null)
-      } else {
-        throw new Error(result.error ?? 'Failed to decrypt PDF')
-      }
+      } else throw new Error('The server returned no decrypted PDF')
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unexpected error occurred'
       toast({
@@ -331,7 +320,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
         </CardTitle>
         <CardDescription>
           Protect your PDFs with password encryption or remove existing protection.
-          All processing happens locally in your browser.
+          Files are sent to your PDFLover backend only when you start this server-only operation.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">

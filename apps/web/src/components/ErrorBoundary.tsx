@@ -63,8 +63,7 @@ class ErrorBoundary extends Component<Props, State> {
 
     console.error('Error Report:', errorReport);
 
-    // In the future, this could send to an error tracking service
-    // For now, we just log it and copy to clipboard
+    // Keep reports local and let the user choose whether to share them.
     navigator.clipboard.writeText(JSON.stringify(errorReport, null, 2))
       .then(() => {
         alert('Error report copied to clipboard. Please share this with the developers.');

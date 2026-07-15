@@ -3,7 +3,7 @@
  * Provides text search and replace functionality for PDF documents
  */
 
-import * as React from 'react';
+import * as React from "react";
 import {
   Search,
   X,
@@ -15,17 +15,22 @@ import {
   Regex,
   Loader2,
   AlertCircle,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Toggle } from '@/components/ui/toggle';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import type { SearchResult, SearchOptions, SearchState } from '@/hooks/useTextSearch';
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type {
+  SearchResult,
+  SearchOptions,
+  SearchState,
+} from "@/hooks/useTextSearch";
 
 /**
  * Props for the SearchPanel component
@@ -117,7 +122,7 @@ export function SearchPanel({
   onGoToMatch,
   onClear,
   onClose,
-  replaceText = '',
+  replaceText = "",
   onReplaceTextChange,
   onReplaceCurrent,
   onReplaceAll,
@@ -144,13 +149,14 @@ export function SearchPanel({
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle when search panel is focused
-      const isSearchFocused = document.activeElement === searchInputRef.current ||
+      const isSearchFocused =
+        document.activeElement === searchInputRef.current ||
         document.activeElement === replaceInputRef.current;
 
-      if (!isSearchFocused && e.key !== 'f') return;
+      if (!isSearchFocused && e.key !== "f") return;
 
       // Ctrl/Cmd + F to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -158,7 +164,7 @@ export function SearchPanel({
       }
 
       // Escape to close or clear
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         e.preventDefault();
         if (query) {
           onClear();
@@ -169,7 +175,7 @@ export function SearchPanel({
       }
 
       // Enter or F3 for next match
-      if (e.key === 'Enter' || e.key === 'F3') {
+      if (e.key === "Enter" || e.key === "F3") {
         e.preventDefault();
         if (e.shiftKey) {
           onPrevMatch();
@@ -180,15 +186,15 @@ export function SearchPanel({
       }
 
       // Ctrl/Cmd + H to toggle replace panel
-      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "h") {
         e.preventDefault();
         setShowReplacePanel((prev) => !prev);
         return;
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [query, onClear, onClose, onNextMatch, onPrevMatch]);
 
   /**
@@ -198,7 +204,7 @@ export function SearchPanel({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onQueryChange(e.target.value);
     },
-    [onQueryChange]
+    [onQueryChange],
   );
 
   /**
@@ -208,7 +214,7 @@ export function SearchPanel({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       onReplaceTextChange?.(e.target.value);
     },
-    [onReplaceTextChange]
+    [onReplaceTextChange],
   );
 
   /**
@@ -233,7 +239,7 @@ export function SearchPanel({
    * Render match count display
    */
   const renderMatchCount = () => {
-    if (searchState === 'searching') {
+    if (searchState === "searching") {
       return (
         <span className="flex items-center gap-1 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />
@@ -242,7 +248,7 @@ export function SearchPanel({
       );
     }
 
-    if (searchState === 'error') {
+    if (searchState === "error") {
       return (
         <span className="flex items-center gap-1 text-xs text-destructive">
           <AlertCircle className="h-3 w-3" />
@@ -272,272 +278,279 @@ export function SearchPanel({
   const highlightContext = (context: string | undefined, matchText: string) => {
     if (!context) return null;
 
-    const parts = context.split(new RegExp(`(${matchText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'));
+    const parts = context.split(
+      new RegExp(`(${matchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi"),
+    );
 
     return (
       <span>
         {parts.map((part, i) =>
           part.toLowerCase() === matchText.toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded">
+            <mark
+              key={i}
+              className="bg-yellow-200 dark:bg-yellow-800 px-0.5 rounded"
+            >
               {part}
             </mark>
           ) : (
             <span key={i}>{part}</span>
-          )
+          ),
         )}
       </span>
     );
   };
 
   return (
-    <div
-      className={cn(
-        'flex flex-col gap-2 border-b bg-background p-3',
-        className
-      )}
-    >
-      {/* Search Row */}
-      <div className="flex items-center gap-2">
-        {/* Search Input */}
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search in document..."
-            value={query}
-            onChange={handleSearchChange}
-            className="h-9 pl-9 pr-24"
-            aria-label="Search text"
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-            {renderMatchCount()}
+    <TooltipProvider>
+      <div
+        className={cn(
+          "flex flex-col gap-2 border-b bg-background p-3",
+          className,
+        )}
+      >
+        {/* Search Row */}
+        <div className="flex items-center gap-2">
+          {/* Search Input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search in document..."
+              value={query}
+              onChange={handleSearchChange}
+              className="h-9 pl-9 pr-24"
+              aria-label="Search text"
+            />
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {renderMatchCount()}
+            </div>
           </div>
+
+          {/* Search Options */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  pressed={options.caseSensitive}
+                  onPressedChange={(pressed: boolean) =>
+                    onOptionsChange({ caseSensitive: pressed })
+                  }
+                  aria-label="Case sensitive"
+                >
+                  <CaseSensitive className="h-4 w-4" />
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Match case</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  pressed={options.wholeWord}
+                  onPressedChange={(pressed: boolean) =>
+                    onOptionsChange({ wholeWord: pressed })
+                  }
+                  aria-label="Whole word"
+                >
+                  <WholeWord className="h-4 w-4" />
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Match whole word</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Toggle
+                  size="sm"
+                  pressed={options.regex}
+                  onPressedChange={(pressed: boolean) =>
+                    onOptionsChange({ regex: pressed })
+                  }
+                  aria-label="Regular expression"
+                >
+                  <Regex className="h-4 w-4" />
+                </Toggle>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Use regular expression</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onPrevMatch}
+                  disabled={matchCount === 0}
+                  aria-label="Previous match"
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Previous match (Shift+Enter)</p>
+              </TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={onNextMatch}
+                  disabled={matchCount === 0}
+                  aria-label="Next match"
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Next match (Enter)</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Toggle Replace */}
+          {onReplaceTextChange && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showReplacePanel ? "secondary" : "ghost"}
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setShowReplacePanel((prev) => !prev)}
+                  aria-label="Toggle replace"
+                  aria-expanded={showReplacePanel}
+                >
+                  <Replace className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Replace (Ctrl+H)</p>
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {/* Close Button */}
+          {onClose && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onClose}
+              aria-label="Close search"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
 
-        {/* Search Options */}
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Toggle
-                size="sm"
-                pressed={options.caseSensitive}
-                onPressedChange={(pressed: boolean) =>
-                  onOptionsChange({ caseSensitive: pressed })
-                }
-                aria-label="Case sensitive"
-              >
-                <CaseSensitive className="h-4 w-4" />
-              </Toggle>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Match case</p>
-            </TooltipContent>
-          </Tooltip>
+        {/* Replace Row */}
+        {showReplacePanel && onReplaceTextChange && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Replace className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={replaceInputRef}
+                type="text"
+                placeholder="Replace with..."
+                value={replaceText}
+                onChange={handleReplaceChange}
+                className="h-9 pl-9"
+                aria-label="Replace text"
+              />
+            </div>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Toggle
-                size="sm"
-                pressed={options.wholeWord}
-                onPressedChange={(pressed: boolean) =>
-                  onOptionsChange({ wholeWord: pressed })
-                }
-                aria-label="Whole word"
-              >
-                <WholeWord className="h-4 w-4" />
-              </Toggle>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Match whole word</p>
-            </TooltipContent>
-          </Tooltip>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReplaceCurrent}
+              disabled={matchCount === 0 || isReplacing}
+              className="shrink-0"
+            >
+              {isReplacing ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : null}
+              Replace
+            </Button>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Toggle
-                size="sm"
-                pressed={options.regex}
-                onPressedChange={(pressed: boolean) =>
-                  onOptionsChange({ regex: pressed })
-                }
-                aria-label="Regular expression"
-              >
-                <Regex className="h-4 w-4" />
-              </Toggle>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Use regular expression</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* Navigation */}
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onPrevMatch}
-                disabled={matchCount === 0}
-                aria-label="Previous match"
-              >
-                <ChevronUp className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Previous match (Shift+Enter)</p>
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={onNextMatch}
-                disabled={matchCount === 0}
-                aria-label="Next match"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Next match (Enter)</p>
-            </TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* Toggle Replace */}
-        {onReplaceTextChange && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={showReplacePanel ? 'secondary' : 'ghost'}
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setShowReplacePanel((prev) => !prev)}
-                aria-label="Toggle replace"
-                aria-expanded={showReplacePanel}
-              >
-                <Replace className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Replace (Ctrl+H)</p>
-            </TooltipContent>
-          </Tooltip>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleReplaceAll}
+              disabled={matchCount === 0 || isReplacing}
+              className="shrink-0"
+            >
+              {isReplacing ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : null}
+              Replace All
+            </Button>
+          </div>
         )}
 
-        {/* Close Button */}
-        {onClose && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onClose}
-            aria-label="Close search"
+        {/* Error Display */}
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-destructive">
+            <AlertCircle className="h-4 w-4" />
+            {error}
+          </div>
+        )}
+
+        {/* Results List */}
+        {showResultsList && results.length > 0 && (
+          <div
+            className="overflow-auto border rounded-md"
+            style={{ maxHeight: resultsMaxHeight }}
           >
-            <X className="h-4 w-4" />
-          </Button>
+            <ul className="divide-y" role="listbox" aria-label="Search results">
+              {results.map((result, index) => (
+                <li key={`${result.page}-${result.index}`}>
+                  <button
+                    type="button"
+                    className={cn(
+                      "w-full px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors",
+                      index === currentMatchIndex && "bg-muted",
+                    )}
+                    onClick={() => onGoToMatch(index)}
+                    role="option"
+                    aria-selected={index === currentMatchIndex}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-muted-foreground text-xs">
+                        Page {result.page}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        Match {index + 1}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-foreground/80 line-clamp-2">
+                      {highlightContext(result.context, result.text)}
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </div>
-
-      {/* Replace Row */}
-      {showReplacePanel && onReplaceTextChange && (
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Replace className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={replaceInputRef}
-              type="text"
-              placeholder="Replace with..."
-              value={replaceText}
-              onChange={handleReplaceChange}
-              className="h-9 pl-9"
-              aria-label="Replace text"
-            />
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReplaceCurrent}
-            disabled={matchCount === 0 || isReplacing}
-            className="shrink-0"
-          >
-            {isReplacing ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : null}
-            Replace
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReplaceAll}
-            disabled={matchCount === 0 || isReplacing}
-            className="shrink-0"
-          >
-            {isReplacing ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : null}
-            Replace All
-          </Button>
-        </div>
-      )}
-
-      {/* Error Display */}
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4" />
-          {error}
-        </div>
-      )}
-
-      {/* Results List */}
-      {showResultsList && results.length > 0 && (
-        <div
-          className="overflow-auto border rounded-md"
-          style={{ maxHeight: resultsMaxHeight }}
-        >
-          <ul className="divide-y" role="listbox" aria-label="Search results">
-            {results.map((result, index) => (
-              <li key={`${result.page}-${result.index}`}>
-                <button
-                  type="button"
-                  className={cn(
-                    'w-full px-3 py-2 text-left text-sm hover:bg-muted/50 transition-colors',
-                    index === currentMatchIndex && 'bg-muted'
-                  )}
-                  onClick={() => onGoToMatch(index)}
-                  role="option"
-                  aria-selected={index === currentMatchIndex}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-muted-foreground text-xs">
-                      Page {result.page}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Match {index + 1}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-xs text-foreground/80 line-clamp-2">
-                    {highlightContext(result.context, result.text)}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
+    </TooltipProvider>
   );
 }
 
-SearchPanel.displayName = 'SearchPanel';
+SearchPanel.displayName = "SearchPanel";
 
 export default SearchPanel;

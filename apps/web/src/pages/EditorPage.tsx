@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
-  Settings,
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -36,7 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { downloadBlob, arrayBufferToBlob } from '@/lib/utils';
 import { usePdfDocument, type PdfMetadata } from '@/hooks/usePdfDocument';
-import { PdfViewer } from '@/components/pdf/PdfViewer';
+import { PdfPageCanvas } from '@/components/pdf/PdfViewer';
 import { AnnotationLayer } from '@/components/pdf/AnnotationLayer';
 import { AnnotationToolbar } from '@/components/pdf/AnnotationToolbar';
 import { TextEditor, type TextEditorData } from '@/components/pdf/TextEditor';
@@ -56,7 +55,10 @@ import {
   addShape,
   flattenForm,
 } from '@pdflover/pdf-core';
-import { redactArea, applyRedactions } from '@pdflover/pdf-core';
+import { db } from '@/lib/storage';
+import { useFileStore } from '@/store/file-store';
+import { useOperationHistory } from '@/hooks/useOperationHistory';
+import { runServerPdfOperation } from '@/lib/api';
 
 /**
  * Page dimensions interface
@@ -80,8 +82,6 @@ export function EditorPage() {
     loadingState,
     error,
     progress,
-    metadata,
-    loadFromFile,
     loadFromArrayBuffer,
   } = usePdfDocument({
     onError: (err) => console.error('PDF load error:', err),
@@ -98,6 +98,10 @@ export function EditorPage() {
   const [fileName, setFileName] = React.useState('document.pdf');
   const [isSaving, setIsSaving] = React.useState(false);
   const [showSaveDialog, setShowSaveDialog] = React.useState(false);
+  const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [currentDocumentId, setCurrentDocumentId] = React.useState<string | null>(
+    searchParams.get('document')
+  );
   const [editingTextAnnotation, setEditingTextAnnotation] = React.useState<Annotation | null>(null);
 
   // Annotation store
@@ -110,10 +114,33 @@ export function EditorPage() {
     updateAnnotation,
     getAnnotationsForPage,
     loadAnnotations,
-    clearAnnotations,
   } = useAnnotationStore();
+  const addFile = useFileStore((state) => state.addFile);
+  const updateStoredFile = useFileStore((state) => state.updateFile);
+  const { recordOperation } = useOperationHistory({
+    showToasts: false,
+    enableKeyboardShortcuts: false,
+  });
 
   const selectedAnnotation = useAnnotationStore(selectSelectedAnnotation);
+  const secureRedactions = React.useMemo(
+    () => annotations.filter((annotation) => annotation.type === 'redaction'),
+    [annotations],
+  );
+
+  React.useEffect(() => {
+    const handleRestoredVersion = (event: Event) => {
+      const detail = (event as CustomEvent<{ documentId: string; blob: Blob }>).detail;
+      if (!detail || detail.documentId !== currentDocumentId) return;
+      void detail.blob.arrayBuffer().then((buffer) => {
+        setPdfData(buffer);
+        loadFromArrayBuffer(buffer);
+        loadAnnotations(detail.documentId, []);
+      });
+    };
+    window.addEventListener('pdflover:document-version-restored', handleRestoredVersion);
+    return () => window.removeEventListener('pdflover:document-version-restored', handleRestoredVersion);
+  }, [currentDocumentId, loadAnnotations, loadFromArrayBuffer]);
 
   // Update total pages when PDF loads
   React.useEffect(() => {
@@ -135,6 +162,37 @@ export function EditorPage() {
     }
   }, [pdfDocument, currentPage]);
 
+  React.useEffect(() => {
+    const documentId = searchParams.get('document');
+    if (!documentId) return;
+    let cancelled = false;
+    void Promise.all([db.getDocument(documentId), db.getDocumentBytes(documentId)])
+      .then(([document, blob]) => {
+        if (cancelled) return;
+        if (!document || !blob) {
+          setSaveError('The selected library document or its stored bytes are unavailable.');
+          return;
+        }
+        void blob.arrayBuffer().then((buffer) => {
+          if (cancelled) return;
+          setCurrentDocumentId(documentId);
+          setPdfData(buffer);
+          setFileName(document.filename);
+          loadFromArrayBuffer(buffer);
+          loadAnnotations(documentId, []);
+          setCurrentPage(1);
+        });
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) {
+          setSaveError(cause instanceof Error ? cause.message : 'Failed to open stored document');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadAnnotations, loadFromArrayBuffer, searchParams]);
+
   // Handle file selection
   const handleFileSelect = React.useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -145,14 +203,15 @@ export function EditorPage() {
         const buffer = await file.arrayBuffer();
         setPdfData(buffer);
         setFileName(file.name);
+        setCurrentDocumentId(null);
         loadFromArrayBuffer(buffer);
-        clearAnnotations();
+        loadAnnotations('unsaved-document', []);
         setCurrentPage(1);
       } catch (err) {
         console.error('Failed to load file:', err);
       }
     },
-    [loadFromArrayBuffer, clearAnnotations]
+    [loadFromArrayBuffer, loadAnnotations]
   );
 
   // Handle file drop
@@ -166,14 +225,15 @@ export function EditorPage() {
         const buffer = await file.arrayBuffer();
         setPdfData(buffer);
         setFileName(file.name);
+        setCurrentDocumentId(null);
         loadFromArrayBuffer(buffer);
-        clearAnnotations();
+        loadAnnotations('unsaved-document', []);
         setCurrentPage(1);
       } catch (err) {
         console.error('Failed to load dropped file:', err);
       }
     },
-    [loadFromArrayBuffer, clearAnnotations]
+    [loadFromArrayBuffer, loadAnnotations]
   );
 
   // Handle annotation click
@@ -218,13 +278,9 @@ export function EditorPage() {
     setEditingTextAnnotation(null);
   }, []);
 
-  // Export PDF with annotations
-  const handleExport = React.useCallback(async () => {
-    if (!pdfData) return;
-
-    setIsSaving(true);
-    try {
-      let modifiedPdf = pdfData;
+  const buildAnnotatedPdf = React.useCallback(async (): Promise<ArrayBuffer> => {
+    if (!pdfData) throw new Error('No document is loaded');
+    let modifiedPdf = pdfData;
 
       // Apply annotations to PDF
       for (const annotation of annotations) {
@@ -365,22 +421,49 @@ export function EditorPage() {
             break;
           }
           case 'redaction': {
-            const redactAnnot = annotation as typeof annotation & { applied: boolean };
-            if (!redactAnnot.applied) {
-              const result = await redactArea(
-                modifiedPdf,
-                annotation.pageNum,
-                annotation.rect,
-                { fillColor: { r: 0, g: 0, b: 0 } }
-              );
-              if (result.success && result.data) {
-                modifiedPdf = result.data;
-              }
-            }
+            // Applied after all local annotations by the server's sanitized
+            // raster rebuild. Never flatten this as a visual-only overlay.
             break;
           }
         }
       }
+
+    return modifiedPdf;
+  }, [pdfData, annotations]);
+
+  const buildFinalPdf = React.useCallback(async (): Promise<ArrayBuffer> => {
+    const locallyAnnotated = await buildAnnotatedPdf();
+    if (secureRedactions.length === 0) return locallyAnnotated;
+    const [result] = await runServerPdfOperation({
+      operation: 'pdf.secure-redact',
+      file: new File([locallyAnnotated], fileName, { type: 'application/pdf' }),
+      options: {
+        dpi: 150,
+        redactions: secureRedactions.map((annotation) => ({
+          page: annotation.pageNum,
+          x: annotation.rect.x,
+          y: annotation.rect.y,
+          width: annotation.rect.width,
+          height: annotation.rect.height,
+        })),
+      },
+    });
+    if (!result) throw new Error('The backend returned no securely redacted PDF');
+    return result.data;
+  }, [buildAnnotatedPdf, fileName, secureRedactions]);
+
+  // Export PDF with flattened annotations
+  const handleExport = React.useCallback(async () => {
+    if (
+      secureRedactions.length > 0 &&
+      !window.confirm(
+        'Secure redaction uploads a temporary copy to your PDFLover backend, rasterizes the document, and removes the job at expiry. Continue?',
+      )
+    ) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const modifiedPdf = await buildFinalPdf();
 
       // Download the modified PDF
       const blob = arrayBufferToBlob(modifiedPdf);
@@ -388,15 +471,92 @@ export function EditorPage() {
       downloadBlob(blob, exportName);
     } catch (err) {
       console.error('Export failed:', err);
+      setSaveError(err instanceof Error ? err.message : 'Export failed');
     } finally {
       setIsSaving(false);
     }
-  }, [pdfData, annotations, fileName]);
+  }, [buildFinalPdf, fileName, secureRedactions.length]);
 
-  // Handle save to IndexedDB (placeholder)
-  const handleSave = React.useCallback(async () => {
+  const handleSave = React.useCallback(() => {
+    setSaveError(null);
     setShowSaveDialog(true);
   }, []);
+
+  const persistDocument = React.useCallback(async () => {
+    if (!pdfData) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      let documentId = currentDocumentId;
+      let beforeVersionId: string | undefined;
+      if (!documentId) {
+        const original = await db.importDocument({
+          file: arrayBufferToBlob(pdfData),
+          filename: fileName,
+          pageCount: totalPages,
+        });
+        documentId = original.id;
+        beforeVersionId = original.currentVersionId;
+        setCurrentDocumentId(original.id);
+        addFile(original);
+      } else {
+        beforeVersionId = (await db.getDocument(documentId))?.currentVersionId;
+      }
+
+      const output = await buildFinalPdf();
+      if (annotations.length > 0) {
+        const outputBlob = arrayBufferToBlob(output);
+        const version = await db.createDocumentVersion(documentId, outputBlob, {
+          source: 'editor-save',
+          label: `Edited ${new Date().toLocaleString()}`,
+        });
+        updateStoredFile(documentId, {
+          filename: fileName,
+          currentVersionId: version.id,
+          fileSize: outputBlob.size,
+          status: 'ready',
+        });
+        recordOperation({
+          type: 'edit',
+          description: `Saved edits to ${fileName}`,
+          before: pdfData.slice(0),
+          after: output.slice(0),
+          canUndo: true,
+          documentIds: [documentId],
+          fileNames: [fileName],
+          fileSize: outputBlob.size,
+          metadata: {
+            versionId: version.id,
+            beforeVersionId,
+            afterVersionId: version.id,
+          },
+        });
+      } else {
+        await db.updateDocument(documentId, { filename: fileName });
+        updateStoredFile(documentId, { filename: fileName });
+      }
+      setPdfData(output);
+      loadFromArrayBuffer(output);
+      loadAnnotations(documentId, []);
+      setShowSaveDialog(false);
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : 'Failed to save document');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [
+    addFile,
+    annotations.length,
+    buildFinalPdf,
+    currentDocumentId,
+    fileName,
+    loadAnnotations,
+    loadFromArrayBuffer,
+    pdfData,
+    recordOperation,
+    totalPages,
+    updateStoredFile,
+  ]);
 
   // Page navigation
   const goToPreviousPage = React.useCallback(() => {
@@ -634,6 +794,12 @@ export function EditorPage() {
         <AnnotationToolbar />
       </div>
 
+      {saveError && (
+        <div role="alert" className="border-b border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+          {saveError}
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
         {/* Thumbnails Sidebar */}
@@ -678,10 +844,13 @@ export function EditorPage() {
               {/* PDF Page Canvas would render here */}
               {pdfDocument && (
                 <div className="absolute inset-0">
-                  {/* This would be the actual PDF page rendering */}
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    Page {currentPage}
-                  </div>
+                  <PdfPageCanvas
+                    pdfDocument={pdfDocument}
+                    pageNumber={currentPage}
+                    scale={zoom}
+                    rotation={0}
+                    isVisible={true}
+                  />
                 </div>
               )}
 
@@ -780,8 +949,9 @@ export function EditorPage() {
           <DialogHeader>
             <DialogTitle>Save Document</DialogTitle>
             <DialogDescription>
-              Save your annotated document to continue editing later.
-              Annotations are stored locally in your browser.
+              {secureRedactions.length > 0
+                ? 'Secure redaction uploads a temporary copy to your PDFLover backend and raster-rebuilds the document so covered content is removed. The saved result returns to local IndexedDB; the server job expires automatically.'
+                : 'Save your annotated document to continue editing later. Annotations are stored locally in your browser.'}
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
@@ -797,12 +967,14 @@ export function EditorPage() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                // Save to IndexedDB would go here
-                setShowSaveDialog(false);
-              }}
+              onClick={() => void persistDocument()}
+              disabled={isSaving}
             >
-              Save
+              {isSaving
+                ? 'Saving…'
+                : secureRedactions.length > 0
+                  ? 'Upload, redact & save'
+                  : 'Save version'}
             </Button>
           </DialogFooter>
         </DialogContent>

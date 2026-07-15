@@ -3,14 +3,14 @@
  * Handles loading PDF documents from various sources using PDF.js
  */
 
-import { useState, useCallback, useRef, useEffect } from 'react';
-import * as pdfjsLib from 'pdfjs-dist';
-import type { PDFDocumentProxy } from 'pdfjs-dist';
+import { useState, useCallback, useRef, useEffect } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url,
 ).toString();
 
 /**
@@ -33,7 +33,7 @@ export interface PdfMetadata {
 /**
  * Loading state for PDF document
  */
-export type PdfLoadingState = 'idle' | 'loading' | 'loaded' | 'error';
+export type PdfLoadingState = "idle" | "loading" | "loaded" | "error";
 
 /**
  * Return type for the usePdfDocument hook
@@ -52,7 +52,10 @@ export interface UsePdfDocumentReturn {
   /** Load PDF from a File object */
   loadFromFile: (file: File) => Promise<void>;
   /** Load PDF from an ArrayBuffer */
-  loadFromArrayBuffer: (buffer: ArrayBuffer, filename?: string) => Promise<void>;
+  loadFromArrayBuffer: (
+    buffer: ArrayBuffer,
+    filename?: string,
+  ) => Promise<void>;
   /** Load PDF from a URL */
   loadFromUrl: (url: string) => Promise<void>;
   /** Close and clean up the current document */
@@ -61,12 +64,12 @@ export interface UsePdfDocumentReturn {
   renderPage: (
     pageNumber: number,
     canvas: HTMLCanvasElement,
-    scale?: number
+    scale?: number,
   ) => Promise<{ width: number; height: number }>;
   /** Get the dimensions of a specific page */
   getPageDimensions: (
     pageNumber: number,
-    scale?: number
+    scale?: number,
   ) => Promise<{ width: number; height: number }>;
 }
 
@@ -92,7 +95,7 @@ function parsePdfDate(dateString: string | undefined): Date | undefined {
 
   // PDF dates are in format: D:YYYYMMDDHHmmss+HH'mm'
   const match = dateString.match(
-    /D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/
+    /D:(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/,
   );
 
   if (match && match.length >= 7) {
@@ -108,7 +111,7 @@ function parsePdfDate(dateString: string | undefined): Date | undefined {
       parseInt(day, 10),
       parseInt(hour, 10),
       parseInt(minute, 10),
-      parseInt(second, 10)
+      parseInt(second, 10),
     );
   }
 
@@ -136,38 +139,37 @@ function parsePdfDate(dateString: string | undefined): Date | undefined {
  * ```
  */
 export function usePdfDocument(
-  options: UsePdfDocumentOptions = {}
+  options: UsePdfDocumentOptions = {},
 ): UsePdfDocumentReturn {
   const { onLoad, onError, onProgress } = options;
 
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
-  const [loadingState, setLoadingState] = useState<PdfLoadingState>('idle');
+  const [loadingState, setLoadingState] = useState<PdfLoadingState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [metadata, setMetadata] = useState<PdfMetadata | null>(null);
 
   // Keep track of the loading task for cancellation
   const loadingTaskRef = useRef<pdfjsLib.PDFDocumentLoadingTask | null>(null);
+  const pdfDocumentRef = useRef<PDFDocumentProxy | null>(null);
 
   /**
    * Clean up the current document
    */
   const closeDocument = useCallback(() => {
-    if (loadingTaskRef.current) {
-      loadingTaskRef.current.destroy();
-      loadingTaskRef.current = null;
-    }
-
-    if (pdfDocument) {
-      pdfDocument.destroy();
-    }
+    const loadingTask = loadingTaskRef.current;
+    const document = pdfDocumentRef.current;
+    loadingTaskRef.current = null;
+    pdfDocumentRef.current = null;
+    if (document) void document.destroy();
+    else if (loadingTask) void loadingTask.destroy();
 
     setPdfDocument(null);
     setMetadata(null);
-    setLoadingState('idle');
+    setLoadingState("idle");
     setError(null);
     setProgress(0);
-  }, [pdfDocument]);
+  }, []);
 
   /**
    * Extract metadata from a loaded PDF document
@@ -176,6 +178,10 @@ export function usePdfDocument(
     async (doc: PDFDocumentProxy): Promise<PdfMetadata> => {
       const info = await doc.getMetadata();
       const pdfInfo = info.info as Record<string, unknown>;
+      const permissions =
+        typeof doc.getPermissions === "function"
+          ? await doc.getPermissions()
+          : null;
 
       return {
         title: pdfInfo?.Title as string | undefined,
@@ -186,12 +192,12 @@ export function usePdfDocument(
         producer: pdfInfo?.Producer as string | undefined,
         creationDate: parsePdfDate(pdfInfo?.CreationDate as string | undefined),
         modificationDate: parsePdfDate(pdfInfo?.ModDate as string | undefined),
-        pdfVersion: info.metadata?.get('pdf:PDFVersion') ?? undefined,
+        pdfVersion: info.metadata?.get("pdf:PDFVersion") ?? undefined,
         pageCount: doc.numPages,
-        isEncrypted: false, // Will be updated if encrypted
+        isEncrypted: permissions !== null,
       };
     },
-    []
+    [],
   );
 
   /**
@@ -202,22 +208,32 @@ export function usePdfDocument(
       // Clean up any existing document
       closeDocument();
 
-      setLoadingState('loading');
+      setLoadingState("loading");
       setError(null);
       setProgress(0);
 
       try {
+        const workerData =
+          typeof source === "string" ? undefined : source.slice();
         const loadingTask = pdfjsLib.getDocument({
-          data: typeof source === 'string' ? undefined : source,
-          url: typeof source === 'string' ? source : undefined,
+          // PDF.js transfers this typed array to its worker. Always pass an
+          // owned copy so StrictMode replays and sibling consumers can reuse
+          // their original document bytes safely.
+          data: workerData,
+          url: typeof source === "string" ? source : undefined,
         });
 
         loadingTaskRef.current = loadingTask;
 
         // Track loading progress
-        loadingTask.onProgress = (progressData: { loaded: number; total: number }) => {
+        loadingTask.onProgress = (progressData: {
+          loaded: number;
+          total: number;
+        }) => {
           if (progressData.total > 0) {
-            const percent = Math.round((progressData.loaded / progressData.total) * 100);
+            const percent = Math.round(
+              (progressData.loaded / progressData.total) * 100,
+            );
             setProgress(percent);
             onProgress?.(percent);
           }
@@ -226,20 +242,23 @@ export function usePdfDocument(
         const doc = await loadingTask.promise;
         const extractedMetadata = await extractMetadata(doc);
 
+        pdfDocumentRef.current = doc;
         setPdfDocument(doc);
         setMetadata(extractedMetadata);
-        setLoadingState('loaded');
+        setLoadingState("loaded");
         setProgress(100);
+        onProgress?.(100);
 
         onLoad?.(extractedMetadata);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to load PDF';
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load PDF";
         setError(errorMessage);
-        setLoadingState('error');
+        setLoadingState("error");
         onError?.(errorMessage);
       }
     },
-    [closeDocument, extractMetadata, onLoad, onError, onProgress]
+    [closeDocument, extractMetadata, onLoad, onError, onProgress],
   );
 
   /**
@@ -247,25 +266,38 @@ export function usePdfDocument(
    */
   const loadFromFile = useCallback(
     async (file: File) => {
-      if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-        const errorMessage = 'Invalid file type. Please select a PDF file.';
+      if (
+        !file.type.includes("pdf") &&
+        !file.name.toLowerCase().endsWith(".pdf")
+      ) {
+        const errorMessage = "Invalid file type. Please select a PDF file.";
         setError(errorMessage);
-        setLoadingState('error');
+        setLoadingState("error");
         onError?.(errorMessage);
         return;
       }
 
       try {
-        const arrayBuffer = await file.arrayBuffer();
+        const arrayBuffer =
+          typeof file.arrayBuffer === "function"
+            ? await file.arrayBuffer()
+            : await new Promise<ArrayBuffer>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as ArrayBuffer);
+                reader.onerror = () =>
+                  reject(reader.error ?? new Error("Failed to read file"));
+                reader.readAsArrayBuffer(file);
+              });
         await loadPdf(new Uint8Array(arrayBuffer));
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to read file';
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to read file";
         setError(errorMessage);
-        setLoadingState('error');
+        setLoadingState("error");
         onError?.(errorMessage);
       }
     },
-    [loadPdf, onError]
+    [loadPdf, onError],
   );
 
   /**
@@ -275,7 +307,7 @@ export function usePdfDocument(
     async (buffer: ArrayBuffer) => {
       await loadPdf(new Uint8Array(buffer));
     },
-    [loadPdf]
+    [loadPdf],
   );
 
   /**
@@ -285,7 +317,7 @@ export function usePdfDocument(
     async (url: string) => {
       await loadPdf(url);
     },
-    [loadPdf]
+    [loadPdf],
   );
 
   /**
@@ -295,22 +327,24 @@ export function usePdfDocument(
     async (
       pageNumber: number,
       canvas: HTMLCanvasElement,
-      scale: number = 1
+      scale: number = 1,
     ): Promise<{ width: number; height: number }> => {
       if (!pdfDocument) {
-        throw new Error('No PDF document loaded');
+        throw new Error("No PDF document loaded");
       }
 
       if (pageNumber < 1 || pageNumber > pdfDocument.numPages) {
-        throw new Error(`Page ${pageNumber} out of range (1-${pdfDocument.numPages})`);
+        throw new Error(
+          `Page ${pageNumber} out of range (1-${pdfDocument.numPages})`,
+        );
       }
 
       const page = await pdfDocument.getPage(pageNumber);
       const viewport = page.getViewport({ scale });
 
-      const context = canvas.getContext('2d');
+      const context = canvas.getContext("2d");
       if (!context) {
-        throw new Error('Could not get canvas 2D context');
+        throw new Error("Could not get canvas 2D context");
       }
 
       // Set canvas dimensions
@@ -328,7 +362,7 @@ export function usePdfDocument(
         height: viewport.height,
       };
     },
-    [pdfDocument]
+    [pdfDocument],
   );
 
   /**
@@ -337,14 +371,16 @@ export function usePdfDocument(
   const getPageDimensions = useCallback(
     async (
       pageNumber: number,
-      scale: number = 1
+      scale: number = 1,
     ): Promise<{ width: number; height: number }> => {
       if (!pdfDocument) {
-        throw new Error('No PDF document loaded');
+        throw new Error("No PDF document loaded");
       }
 
       if (pageNumber < 1 || pageNumber > pdfDocument.numPages) {
-        throw new Error(`Page ${pageNumber} out of range (1-${pdfDocument.numPages})`);
+        throw new Error(
+          `Page ${pageNumber} out of range (1-${pdfDocument.numPages})`,
+        );
       }
 
       const page = await pdfDocument.getPage(pageNumber);
@@ -355,20 +391,20 @@ export function usePdfDocument(
         height: viewport.height,
       };
     },
-    [pdfDocument]
+    [pdfDocument],
   );
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (loadingTaskRef.current) {
-        loadingTaskRef.current.destroy();
-      }
-      if (pdfDocument) {
-        pdfDocument.destroy();
-      }
+      const loadingTask = loadingTaskRef.current;
+      const document = pdfDocumentRef.current;
+      loadingTaskRef.current = null;
+      pdfDocumentRef.current = null;
+      if (document) void document.destroy();
+      else if (loadingTask) void loadingTask.destroy();
     };
-  }, [pdfDocument]);
+  }, []);
 
   return {
     pdfDocument,

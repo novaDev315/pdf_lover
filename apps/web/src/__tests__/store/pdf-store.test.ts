@@ -175,14 +175,12 @@ describe('usePDFStore', () => {
 
       it('should update updatedAt timestamp', () => {
         const doc = createMockDocument('doc-1');
-        const originalDate = doc.updatedAt;
+        const originalDate = new Date(0);
+        doc.updatedAt = originalDate;
 
         act(() => {
           usePDFStore.getState().addDocument(doc);
         });
-
-        // Wait a tick to ensure different timestamp
-        vi.advanceTimersByTime(100);
 
         act(() => {
           usePDFStore.getState().updateDocument('doc-1', {

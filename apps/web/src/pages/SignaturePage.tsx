@@ -7,6 +7,7 @@ import { ArrowLeft, Heart } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { SignaturePanel } from '@/components/tools/SignaturePanel'
+import { DigitalSignaturePanel } from '@/components/tools/DigitalSignaturePanel'
 
 /**
  * Signature tools page component
@@ -50,17 +51,20 @@ export function SignaturePage() {
             Sign PDF
           </h1>
           <p className="text-surface-600 dark:text-surface-400">
-            Add your signature to PDF documents. Draw, type, or upload your signature image.
-            All processing happens locally in your browser.
+            Add a local visual stamp or create a certificate-backed signature through an explicit temporary backend job.
           </p>
         </div>
 
         <SignaturePanel />
 
+        <div className="mt-8">
+          <DigitalSignaturePanel />
+        </div>
+
         {/* Tips Section */}
         <div className="mt-8 p-6 bg-white dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-800">
           <h2 className="text-lg font-semibold text-surface-900 dark:text-white mb-4">
-            Tips for Digital Signatures
+            Tips for Visual Signatures
           </h2>
           <ul className="space-y-2 text-sm text-surface-600 dark:text-surface-400">
             <li className="flex items-start gap-2">
@@ -86,11 +90,10 @@ export function SignaturePage() {
           </ul>
         </div>
 
-        {/* Legal Notice */}
+        {/* Signature distinction */}
         <div className="mt-4 p-4 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            <strong>Note:</strong> This tool creates visual signatures. For legally binding digital signatures
-            with certificates, additional verification may be required depending on your jurisdiction.
+            <strong>Important:</strong> Drawn, typed, and image signatures are visual stamps only. Use the separate certificate-backed section for a cryptographic PDF signature.
           </p>
         </div>
       </main>

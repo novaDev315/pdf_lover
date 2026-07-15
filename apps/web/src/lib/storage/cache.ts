@@ -423,9 +423,9 @@ export async function cacheData(
       },
     });
 
-    // Use a fake URL as the key
-    const fakeUrl = `pdflover://cache/${cacheName}/${key}`;
-    await cache.put(fakeUrl, response);
+    // Use a namespaced synthetic URL as the cache key
+    const cacheKeyUrl = `pdflover://cache/${cacheName}/${key}`;
+    await cache.put(cacheKeyUrl, response);
     return true;
   } catch (error) {
     console.error(`Failed to cache data with key ${key}:`, error);
@@ -443,8 +443,8 @@ export async function getCachedData(
   key: string,
   cacheName: CacheName = CACHE_NAMES.PDF_DATA
 ): Promise<Response | null> {
-  const fakeUrl = `pdflover://cache/${cacheName}/${key}`;
-  return getCachedAsset(fakeUrl, cacheName);
+  const cacheKeyUrl = `pdflover://cache/${cacheName}/${key}`;
+  return getCachedAsset(cacheKeyUrl, cacheName);
 }
 
 /**
@@ -457,8 +457,8 @@ export async function deleteCachedData(
   key: string,
   cacheName: CacheName = CACHE_NAMES.PDF_DATA
 ): Promise<boolean> {
-  const fakeUrl = `pdflover://cache/${cacheName}/${key}`;
-  return deleteCachedAsset(fakeUrl, cacheName);
+  const cacheKeyUrl = `pdflover://cache/${cacheName}/${key}`;
+  return deleteCachedAsset(cacheKeyUrl, cacheName);
 }
 
 /**

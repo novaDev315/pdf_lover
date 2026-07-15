@@ -4,26 +4,87 @@
  */
 
 import * as React from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
 import {
   useBatchStore,
   selectIsQueueProcessing,
   type BatchOperation,
   type BatchOperationResult,
+  type BatchOperationArtifact,
   type CompressOptions,
   type WatermarkOptions,
   type SplitOptions,
-  type SecurityOptions,
   type ConvertOptions,
+  type CropOptions,
+  type TrimOptions,
+  type ResizeOptions,
+  type OCROptions,
 } from '@/store/batch-store';
 import { useToast } from '@/hooks/use-toast';
 import { db } from '@/lib/storage/indexeddb';
+import { runServerPdfOperation } from '@/lib/api';
 import type { ProgressInfo } from '@pdflover/shared';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url
+).toString();
 
 // Dynamic imports for pdf-core to avoid module resolution issues at build time
 const getPdfCore = async () => {
   const pdfCore = await import('@pdflover/pdf-core');
   return pdfCore;
 };
+
+function withoutExtension(filename: string): string {
+  return filename.replace(/\.pdf$/i, '');
+}
+
+function pdfArtifact(data: ArrayBuffer, filename: string): BatchOperationArtifact {
+  return { data, filename, mediaType: 'application/pdf' };
+}
+
+function mediaTypeForFormat(format: ConvertOptions['format']): string {
+  const types: Record<ConvertOptions['format'], string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    txt: 'text/plain;charset=utf-8',
+    html: 'text/html;charset=utf-8',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  };
+  return types[format];
+}
+
+function parseRanges(input: string): Array<{ start: number; end: number }> {
+  const ranges = input
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const match = /^(\d+)(?:\s*-\s*(\d+))?$/.exec(part);
+      if (!match) throw new Error(`Invalid page range: ${part}`);
+      const start = Number(match[1]);
+      const end = Number(match[2] ?? match[1]);
+      if (start < 1 || end < start) throw new Error(`Invalid page range: ${part}`);
+      return { start, end };
+    });
+  if (ranges.length === 0) throw new Error('At least one page range is required');
+  return ranges;
+}
+
+async function pageCount(buffer: ArrayBuffer): Promise<number> {
+  const document = await pdfjsLib.getDocument({ data: new Uint8Array(buffer).slice() }).promise;
+  try {
+    return document.numPages;
+  } finally {
+    await document.destroy();
+  }
+}
 
 /**
  * State for the batch processor
@@ -77,7 +138,7 @@ export interface UseBatchProcessorReturn {
 async function processMerge(
   operation: BatchOperation,
   onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer> {
+): Promise<BatchOperationArtifact[]> {
   const pdfCore = await getPdfCore();
   const files = operation.files.map((f) => f.file);
   const result = await pdfCore.mergePDFFiles(files, {
@@ -89,7 +150,8 @@ async function processMerge(
     throw new Error(result.error ?? 'Merge operation failed');
   }
 
-  return result.data;
+  const options = operation.options as { outputFilename?: string };
+  return [pdfArtifact(result.data, options.outputFilename || 'merged.pdf')];
 }
 
 /**
@@ -97,15 +159,32 @@ async function processMerge(
  */
 async function processCompress(
   operation: BatchOperation,
-  onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer[]> {
+  onProgress: (info: ProgressInfo) => void,
+  signal?: AbortSignal,
+): Promise<BatchOperationArtifact[]> {
   const pdfCore = await getPdfCore();
   const options = operation.options as CompressOptions;
-  const results: ArrayBuffer[] = [];
+  const results: BatchOperationArtifact[] = [];
 
   for (let i = 0; i < operation.files.length; i++) {
     const fileInfo = operation.files[i];
     if (!fileInfo) continue;
+    if (options.level === 'maximum') {
+      if (!options.serverConsent) throw new Error('Temporary server processing consent is required');
+      const artifacts = await runServerPdfOperation({
+        operation: 'pdf.compress.lossy',
+        file: fileInfo.file,
+        options: { quality: 60, dpi: 120 },
+        signal,
+        onProgress: (info) => onProgress({
+          ...info,
+          percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+          stage: `Compressing ${fileInfo.name}: ${info.stage}`,
+        }),
+      });
+      results.push(...artifacts);
+      continue;
+    }
     const buffer = await fileInfo.file.arrayBuffer();
 
     const result = await pdfCore.compressPDF({
@@ -127,7 +206,7 @@ async function processCompress(
       throw new Error(result.error ?? `Failed to compress ${fileInfo.name}`);
     }
 
-    results.push(result.data);
+    results.push(pdfArtifact(result.data, `${withoutExtension(fileInfo.name)}_compressed.pdf`));
   }
 
   return results;
@@ -139,26 +218,37 @@ async function processCompress(
 async function processSplit(
   operation: BatchOperation,
   onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer[]> {
+): Promise<BatchOperationArtifact[]> {
   const pdfCore = await getPdfCore();
   const options = operation.options as SplitOptions;
-  const results: ArrayBuffer[] = [];
+  const results: BatchOperationArtifact[] = [];
 
   for (let i = 0; i < operation.files.length; i++) {
     const fileInfo = operation.files[i];
     if (!fileInfo) continue;
     const buffer = await fileInfo.file.arrayBuffer();
 
-    let pageRanges: string | undefined;
-    if (options.mode === 'range' && options.ranges) {
-      pageRanges = options.ranges;
+    let splitMode: 'single' | 'range' = 'single';
+    let ranges: Array<{ start: number; end: number }> | undefined;
+    if (options.mode === 'range') {
+      if (!options.ranges) throw new Error('Page ranges are required');
+      splitMode = 'range';
+      ranges = parseRanges(options.ranges);
+    } else if (options.mode === 'even' || options.mode === 'odd') {
+      const count = await pageCount(buffer);
+      const parity = options.mode === 'even' ? 0 : 1;
+      ranges = Array.from({ length: count }, (_, index) => index + 1)
+        .filter((page) => page % 2 === parity)
+        .map((page) => ({ start: page, end: page }));
+      if (ranges.length === 0) throw new Error(`Document has no ${options.mode} pages`);
+      splitMode = 'range';
     }
 
-    const splitMode = options.mode === 'all' ? 'single' : options.mode === 'range' ? 'range' : 'single';
     const result = await pdfCore.splitPDF({
       document: buffer,
       mode: splitMode,
-      ranges: pageRanges ? [{ start: 1, end: 1 }] : undefined,
+      ranges,
+      outputPrefix: `${withoutExtension(fileInfo.name)}_split`,
       onProgress: (info: ProgressInfo) => {
         const fileProgress = (i / operation.files.length) * 100;
         const currentProgress = info.percentage / operation.files.length;
@@ -170,16 +260,10 @@ async function processSplit(
       },
     } as Parameters<typeof pdfCore.splitPDF>[0]);
 
-    if (!result.success || !result.data) {
+    if (!result.success || !result.files?.length) {
       throw new Error(result.error ?? `Failed to split ${fileInfo.name}`);
     }
-
-    // Split returns multiple PDFs
-    if (Array.isArray(result.data)) {
-      results.push(...result.data);
-    } else {
-      results.push(result.data);
-    }
+    results.push(...result.files.map((file) => pdfArtifact(file.data, file.filename)));
   }
 
   return results;
@@ -191,10 +275,10 @@ async function processSplit(
 async function processWatermark(
   operation: BatchOperation,
   onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer[]> {
+): Promise<BatchOperationArtifact[]> {
   const pdfCore = await getPdfCore();
   const options = operation.options as WatermarkOptions;
-  const results: ArrayBuffer[] = [];
+  const results: BatchOperationArtifact[] = [];
 
   for (let i = 0; i < operation.files.length; i++) {
     const fileInfo = operation.files[i];
@@ -224,7 +308,7 @@ async function processWatermark(
       throw new Error(result.error ?? `Failed to add watermark to ${fileInfo.name}`);
     }
 
-    results.push(result.data);
+    results.push(pdfArtifact(result.data, `${withoutExtension(fileInfo.name)}_watermarked.pdf`));
   }
 
   return results;
@@ -235,69 +319,125 @@ async function processWatermark(
  */
 async function processSecurity(
   operation: BatchOperation,
-  onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer[]> {
-  const pdfCore = await getPdfCore();
-  const options = operation.options as SecurityOptions;
-  const results: ArrayBuffer[] = [];
-
+  onProgress: (info: ProgressInfo) => void,
+  signal?: AbortSignal,
+): Promise<BatchOperationArtifact[]> {
+  const options = operation.options as import('@/store/batch-store').SecurityOptions;
+  if (!options.ownerPassword) throw new Error('Owner password is required for PDF encryption');
+  const results: BatchOperationArtifact[] = [];
   for (let i = 0; i < operation.files.length; i++) {
-    const fileInfo = operation.files[i];
-    if (!fileInfo) continue;
-    const buffer = await fileInfo.file.arrayBuffer();
-
-    const result = await pdfCore.encryptPDF({
-      document: buffer,
-      userPassword: options.password ?? '',
-      onProgress: (info: ProgressInfo) => {
-        const fileProgress = (i / operation.files.length) * 100;
-        const currentProgress = info.percentage / operation.files.length;
-        onProgress({
-          ...info,
-          percentage: fileProgress + currentProgress,
-          stage: `Securing ${fileInfo.name}...`,
-        });
-      },
-    } as Parameters<typeof pdfCore.encryptPDF>[0]);
-
-    if (!result.success || !result.data) {
-      throw new Error(result.error ?? `Failed to secure ${fileInfo.name}`);
-    }
-
-    results.push(result.data);
+    const fileInfo = operation.files[i]!;
+    const artifacts = await runServerPdfOperation({
+      operation: 'pdf.encrypt',
+      file: fileInfo.file,
+      options,
+      signal,
+      onProgress: (info) => onProgress({
+        ...info,
+        percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+        stage: `Securing ${fileInfo.name}: ${info.stage}`,
+      }),
+    });
+    results.push(...artifacts);
   }
-
   return results;
 }
 
 /**
  * Process an OCR operation
- * Note: OCR returns text results, we create a simple text PDF
  */
 async function processOCR(
   operation: BatchOperation,
-  onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer[]> {
-  const results: ArrayBuffer[] = [];
+  onProgress: (info: ProgressInfo) => void,
+  signal?: AbortSignal,
+): Promise<BatchOperationArtifact[]> {
+  const pdfCore = await getPdfCore();
+  const options = operation.options as OCROptions;
+  const results: BatchOperationArtifact[] = [];
 
   for (let i = 0; i < operation.files.length; i++) {
     const fileInfo = operation.files[i];
     if (!fileInfo) continue;
-
-    onProgress({
-      percentage: ((i + 0.5) / operation.files.length) * 100,
-      stage: `Running OCR on ${fileInfo.name}...`,
-    });
-
-    // OCR operations return text, so we'll just return the original file
-    // In a real implementation, this would create a searchable PDF
+    if (options.engine === 'server') {
+      if (!options.serverConsent) throw new Error('Temporary server processing consent is required');
+      const artifacts = await runServerPdfOperation({
+        operation: 'pdf.ocr',
+        file: fileInfo.file,
+        options: { language: options.language, enhanceScans: options.enhanceScans, dpi: 200 },
+        signal,
+        onProgress: (info) => onProgress({
+          ...info,
+          percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+          stage: `OCR ${fileInfo.name}: ${info.stage}`,
+        }),
+      });
+      results.push(...artifacts);
+      continue;
+    }
     const buffer = await fileInfo.file.arrayBuffer();
-    results.push(buffer);
+    const pdfDocument = await pdfjsLib.getDocument({ data: new Uint8Array(buffer).slice() }).promise;
+    const canvases: HTMLCanvasElement[] = [];
 
-    onProgress({
-      percentage: ((i + 1) / operation.files.length) * 100,
-      stage: `Completed OCR on ${fileInfo.name}`,
-    });
+    try {
+      for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber++) {
+        const page = await pdfDocument.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = globalThis.document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) throw new Error('Canvas rendering is unavailable');
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        if (options.enhanceScans) {
+          const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+          for (let offset = 0; offset < pixels.data.length; offset += 4) {
+            const luminance =
+              pixels.data[offset]! * 0.299 +
+              pixels.data[offset + 1]! * 0.587 +
+              pixels.data[offset + 2]! * 0.114;
+            const enhanced = luminance < 170 ? Math.max(0, luminance * 0.75) : Math.min(255, luminance * 1.08);
+            pixels.data[offset] = enhanced;
+            pixels.data[offset + 1] = enhanced;
+            pixels.data[offset + 2] = enhanced;
+          }
+          context.putImageData(pixels, 0, 0);
+        }
+
+        canvases.push(canvas);
+        onProgress({
+          percentage: ((i + pageNumber / pdfDocument.numPages * 0.2) / operation.files.length) * 100,
+          stage: `Rendering ${fileInfo.name}, page ${pageNumber}...`,
+          currentItem: pageNumber,
+          totalItems: pdfDocument.numPages,
+        });
+      }
+
+      const language = pdfCore.isValidLanguageCode(options.language) ? options.language : 'eng';
+      const ocr = await pdfCore.ocrPDF(canvases, {
+        languages: [language],
+        onProgress: (info: ProgressInfo) => onProgress({
+          ...info,
+          percentage: ((i + 0.2 + info.percentage / 100 * 0.7) / operation.files.length) * 100,
+          stage: `OCR ${fileInfo.name}: ${info.stage}`,
+        }),
+      });
+      if (!ocr.success || !ocr.data) {
+        throw new Error(ocr.error ?? `OCR failed for ${fileInfo.name}`);
+      }
+
+      const searchable = await pdfCore.addTextLayerToPDF(new Uint8Array(buffer), ocr.data, 2);
+      if (!searchable.success || !searchable.data) {
+        throw new Error(searchable.error ?? `Could not create searchable PDF for ${fileInfo.name}`);
+      }
+      results.push(pdfArtifact(searchable.data, `${withoutExtension(fileInfo.name)}_searchable.pdf`));
+      onProgress({
+        percentage: ((i + 1) / operation.files.length) * 100,
+        stage: `Created searchable PDF for ${fileInfo.name}`,
+      });
+    } finally {
+      await pdfDocument.destroy();
+    }
   }
 
   return results;
@@ -308,23 +448,45 @@ async function processOCR(
  */
 async function processConvert(
   operation: BatchOperation,
-  onProgress: (info: ProgressInfo) => void
-): Promise<ArrayBuffer[]> {
+  onProgress: (info: ProgressInfo) => void,
+  signal?: AbortSignal,
+): Promise<BatchOperationArtifact[]> {
   const pdfCore = await getPdfCore();
   const options = operation.options as ConvertOptions;
-  const results: ArrayBuffer[] = [];
+  const results: BatchOperationArtifact[] = [];
 
   for (let i = 0; i < operation.files.length; i++) {
     const fileInfo = operation.files[i];
     if (!fileInfo) continue;
+    if (options.format === 'docx' || options.format === 'xlsx' || options.format === 'pptx') {
+      if (!options.serverConsent) throw new Error('Temporary server processing consent is required');
+      const artifacts = await runServerPdfOperation({
+        operation: `pdf.convert.${options.format}`,
+        file: fileInfo.file,
+        options: { dpi: 150 },
+        signal,
+        onProgress: (info) => onProgress({
+          ...info,
+          percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+          stage: `Converting ${fileInfo.name}: ${info.stage}`,
+        }),
+      });
+      results.push(...artifacts);
+      continue;
+    }
     const buffer = await fileInfo.file.arrayBuffer();
-
-    // Map format to supported output format
-    const outputFormat = options.format === 'png' || options.format === 'jpg' ? options.format : 'png';
 
     const result = await pdfCore.convertPDF({
       document: buffer,
-      outputFormat: outputFormat as 'png' | 'jpg' | 'webp',
+      outputFormat: options.format,
+      imageQuality:
+        options.quality !== undefined && options.quality >= 90
+          ? 'maximum'
+          : options.quality !== undefined && options.quality >= 75
+            ? 'high'
+            : options.quality !== undefined && options.quality < 50
+              ? 'low'
+              : 'medium',
       onProgress: (info: ProgressInfo) => {
         const fileProgress = (i / operation.files.length) * 100;
         const currentProgress = info.percentage / operation.files.length;
@@ -336,13 +498,122 @@ async function processConvert(
       },
     });
 
-    if (!result.success || !result.data) {
+    if (!result.success || (!result.data && !result.files?.length)) {
       throw new Error(result.error ?? `Failed to convert ${fileInfo.name}`);
     }
-
-    results.push(result.data);
+    if (result.files?.length) {
+      results.push(...result.files.map((artifact) => ({
+        data: artifact.data,
+        filename:
+          operation.files.length > 1
+            ? `${withoutExtension(fileInfo.name)}_${artifact.filename}`
+            : artifact.filename,
+        mediaType: mediaTypeForFormat(options.format),
+      })));
+    } else if (result.data) {
+      results.push({
+        data: result.data,
+        filename: `${withoutExtension(fileInfo.name)}.${options.format}`,
+        mediaType: mediaTypeForFormat(options.format),
+      });
+    }
   }
 
+  return results;
+}
+
+async function processCrop(
+  operation: BatchOperation,
+  onProgress: (info: ProgressInfo) => void
+): Promise<BatchOperationArtifact[]> {
+  const pdfCore = await getPdfCore();
+  const options = operation.options as CropOptions;
+  const results: BatchOperationArtifact[] = [];
+  for (let i = 0; i < operation.files.length; i++) {
+    const fileInfo = operation.files[i]!;
+    const result = await pdfCore.cropPages({
+      document: await fileInfo.file.arrayBuffer(),
+      cropPercent: options.cropMode === 'percentage' ? options.cropPercent : undefined,
+      cropBox: options.cropMode === 'absolute' ? options.cropBox : undefined,
+      boxType: options.boxType,
+      onProgress: (info: ProgressInfo) => onProgress({
+        ...info,
+        percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+        stage: `Cropping ${fileInfo.name}: ${info.stage}`,
+      }),
+    });
+    if (!result.success || !result.data) throw new Error(result.error ?? `Failed to crop ${fileInfo.name}`);
+    results.push(pdfArtifact(result.data, `${withoutExtension(fileInfo.name)}_cropped.pdf`));
+  }
+  return results;
+}
+
+async function processTrim(
+  operation: BatchOperation,
+  onProgress: (info: ProgressInfo) => void
+): Promise<BatchOperationArtifact[]> {
+  const pdfCore = await getPdfCore();
+  const options = operation.options as TrimOptions;
+  const results: BatchOperationArtifact[] = [];
+  for (let i = 0; i < operation.files.length; i++) {
+    const fileInfo = operation.files[i]!;
+    const result = await pdfCore.trimMargins({
+      document: await fileInfo.file.arrayBuffer(),
+      threshold: options.threshold,
+      padding: options.padding,
+      uniformPadding: options.uniformPadding,
+      onProgress: (info: ProgressInfo) => onProgress({
+        ...info,
+        percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+        stage: `Trimming ${fileInfo.name}: ${info.stage}`,
+      }),
+    });
+    if (!result.success || !result.data) throw new Error(result.error ?? `Failed to trim ${fileInfo.name}`);
+    results.push(pdfArtifact(result.data, `${withoutExtension(fileInfo.name)}_trimmed.pdf`));
+  }
+  return results;
+}
+
+async function processResize(
+  operation: BatchOperation,
+  onProgress: (info: ProgressInfo) => void
+): Promise<BatchOperationArtifact[]> {
+  const pdfCore = await getPdfCore();
+  const options = operation.options as ResizeOptions;
+  const results: BatchOperationArtifact[] = [];
+  for (let i = 0; i < operation.files.length; i++) {
+    const fileInfo = operation.files[i]!;
+    let width = options.resizeMode === 'custom' ? options.width : undefined;
+    let height = options.resizeMode === 'custom' ? options.height : undefined;
+    const preset = options.resizeMode !== 'custom' && typeof options.preset === 'string' && options.preset in pdfCore.PAGE_SIZES
+      ? options.preset as keyof typeof pdfCore.PAGE_SIZES
+      : undefined;
+    if (options.orientation === 'landscape') {
+      if (preset) {
+        const dimensions = pdfCore.PAGE_SIZES[preset];
+        width = Math.max(dimensions.width, dimensions.height);
+        height = Math.min(dimensions.width, dimensions.height);
+      } else if (width && height && height > width) {
+        [width, height] = [height, width];
+      }
+    }
+    const result = await pdfCore.resizePages({
+      document: await fileInfo.file.arrayBuffer(),
+      preset: width && height ? undefined : preset,
+      width,
+      height,
+      preserveAspectRatio: options.maintainAspectRatio,
+      scaleContent: options.scaleContent,
+      centerContent: options.centerContent,
+      onProgress: (info: ProgressInfo) => onProgress({
+        ...info,
+        percentage: ((i + info.percentage / 100) / operation.files.length) * 100,
+        stage: `Resizing ${fileInfo.name}: ${info.stage}`,
+      }),
+    });
+    if (!result.success || !result.data) throw new Error(result.error ?? `Failed to resize ${fileInfo.name}`);
+    results.push(pdfArtifact(result.data, `${withoutExtension(fileInfo.name)}_resized.pdf`));
+  }
   return results;
 }
 
@@ -393,29 +664,42 @@ export function useBatchProcessor(
       };
 
       try {
-        let resultData: ArrayBuffer | ArrayBuffer[];
+        let artifacts: BatchOperationArtifact[];
 
         switch (operation.type) {
           case 'merge':
-            resultData = await processMerge(operation, handleProgress);
+            artifacts = await processMerge(operation, handleProgress);
             break;
           case 'compress':
-            resultData = await processCompress(operation, handleProgress);
+            artifacts = await processCompress(operation, handleProgress, abortControllerRef.current?.signal);
             break;
           case 'split':
-            resultData = await processSplit(operation, handleProgress);
+            artifacts = await processSplit(operation, handleProgress);
             break;
           case 'watermark':
-            resultData = await processWatermark(operation, handleProgress);
+            artifacts = await processWatermark(operation, handleProgress);
             break;
           case 'security':
-            resultData = await processSecurity(operation, handleProgress);
+            artifacts = await processSecurity(
+              operation,
+              handleProgress,
+              abortControllerRef.current?.signal,
+            );
             break;
           case 'ocr':
-            resultData = await processOCR(operation, handleProgress);
+            artifacts = await processOCR(operation, handleProgress, abortControllerRef.current?.signal);
             break;
           case 'convert':
-            resultData = await processConvert(operation, handleProgress);
+            artifacts = await processConvert(operation, handleProgress, abortControllerRef.current?.signal);
+            break;
+          case 'crop':
+            artifacts = await processCrop(operation, handleProgress);
+            break;
+          case 'trim':
+            artifacts = await processTrim(operation, handleProgress);
+            break;
+          case 'resize':
+            artifacts = await processResize(operation, handleProgress);
             break;
           default:
             throw new Error(`Unsupported operation type: ${operation.type}`);
@@ -423,14 +707,15 @@ export function useBatchProcessor(
 
         const processingTime = Date.now() - startTime;
 
-        // For multiple results, only return the first one (or merge them)
-        const finalData = Array.isArray(resultData) ? resultData[0] : resultData;
-        const outputSize = finalData?.byteLength ?? 0;
+        if (artifacts.length === 0) throw new Error('Operation produced no output artifacts');
+        const firstArtifact = artifacts[0]!;
+        const outputSize = artifacts.reduce((total, artifact) => total + artifact.data.byteLength, 0);
 
         const result: BatchOperationResult = {
           success: true,
-          data: finalData,
-          filename: `${operation.type}_result.pdf`,
+          artifacts,
+          data: firstArtifact.data,
+          filename: firstArtifact.filename,
           processedAt: new Date(),
           processingTime,
           outputSize,
@@ -517,17 +802,22 @@ export function useBatchProcessor(
           }
 
           // Store result in IndexedDB if enabled
-          if (storeResults && result.data) {
+          if (storeResults && result.artifacts?.length) {
             try {
-              await db.saveSetting(`batch_result_${operation.id}`, {
-                operationId: operation.id,
-                type: operation.type,
-                data: Array.from(new Uint8Array(result.data)),
-                filename: result.filename,
-                processedAt: result.processedAt,
+              await db.saveLocalOperationResult({
+                id: operation.id,
+                operation: operation.type,
+                artifacts: result.artifacts,
+                completedAt: result.processedAt,
               });
-            } catch {
-              // Silently fail storage
+            } catch (error) {
+              if (showToasts) {
+                toast({
+                  title: 'Result not saved to library history',
+                  description: error instanceof Error ? error.message : 'IndexedDB storage failed',
+                  variant: 'destructive',
+                });
+              }
             }
           }
         } else {

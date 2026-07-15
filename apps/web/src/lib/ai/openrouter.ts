@@ -1,6 +1,6 @@
 /**
- * OpenRouter API Integration
- * Cloud AI provider with support for multiple models
+ * OpenRouter integration through the PDFLover backend. The browser never
+ * receives or stores the provider credential.
  */
 
 import type {
@@ -8,104 +8,14 @@ import type {
   ChatCompletionResponse,
   ChatStreamChunk,
   Message,
-  AIModelInfo,
 } from '@pdflover/shared'
 import { generateId } from '@/lib/utils'
 
 /**
  * OpenRouter API configuration
  */
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1'
-
-/**
- * Available models via OpenRouter
- */
-export const OPENROUTER_MODELS: AIModelInfo[] = [
-  {
-    id: 'anthropic/claude-3-haiku',
-    name: 'Claude 3 Haiku',
-    provider: 'openrouter',
-    contextWindow: 200000,
-    maxOutputTokens: 4096,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    inputCostPer1K: 0.00025,
-    outputCostPer1K: 0.00125,
-    isLocal: false,
-  },
-  {
-    id: 'anthropic/claude-3-sonnet',
-    name: 'Claude 3 Sonnet',
-    provider: 'openrouter',
-    contextWindow: 200000,
-    maxOutputTokens: 4096,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    inputCostPer1K: 0.003,
-    outputCostPer1K: 0.015,
-    isLocal: false,
-  },
-  {
-    id: 'openai/gpt-4o-mini',
-    name: 'GPT-4o Mini',
-    provider: 'openrouter',
-    contextWindow: 128000,
-    maxOutputTokens: 16384,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    inputCostPer1K: 0.00015,
-    outputCostPer1K: 0.0006,
-    isLocal: false,
-  },
-  {
-    id: 'openai/gpt-4o',
-    name: 'GPT-4o',
-    provider: 'openrouter',
-    contextWindow: 128000,
-    maxOutputTokens: 4096,
-    supportsVision: true,
-    supportsFunctionCalling: true,
-    inputCostPer1K: 0.005,
-    outputCostPer1K: 0.015,
-    isLocal: false,
-  },
-  {
-    id: 'google/gemini-pro',
-    name: 'Gemini Pro',
-    provider: 'openrouter',
-    contextWindow: 32000,
-    maxOutputTokens: 8192,
-    supportsVision: false,
-    supportsFunctionCalling: true,
-    inputCostPer1K: 0.00025,
-    outputCostPer1K: 0.0005,
-    isLocal: false,
-  },
-  {
-    id: 'meta-llama/llama-3-70b-instruct',
-    name: 'Llama 3 70B',
-    provider: 'openrouter',
-    contextWindow: 8192,
-    maxOutputTokens: 4096,
-    supportsVision: false,
-    supportsFunctionCalling: false,
-    inputCostPer1K: 0.00059,
-    outputCostPer1K: 0.00079,
-    isLocal: false,
-  },
-  {
-    id: 'mistralai/mixtral-8x7b-instruct',
-    name: 'Mixtral 8x7B',
-    provider: 'openrouter',
-    contextWindow: 32000,
-    maxOutputTokens: 4096,
-    supportsVision: false,
-    supportsFunctionCalling: false,
-    inputCostPer1K: 0.00024,
-    outputCostPer1K: 0.00024,
-    isLocal: false,
-  },
-]
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const CHAT_API_URL = `${API_BASE_URL}/api/v1/ai/chat`
 
 /**
  * OpenRouter request message format
@@ -163,6 +73,21 @@ interface OpenRouterError {
   }
 }
 
+interface ApiProxyError {
+  error?: {
+    message?: string
+  }
+}
+
+async function responseError(response: Response): Promise<string> {
+  try {
+    const data = await response.json() as OpenRouterError | ApiProxyError
+    return data.error?.message || `AI request failed with status ${response.status}`
+  } catch {
+    return `AI request failed with status ${response.status}`
+  }
+}
+
 /**
  * Build system prompt for document Q&A
  */
@@ -214,37 +139,29 @@ function convertMessages(
  */
 export async function sendChatCompletion(
   messages: Message[],
-  apiKey: string,
   options: Partial<ChatOptions> = {}
 ): Promise<ChatCompletionResponse> {
   const startTime = performance.now()
-  const modelId = options.modelId || 'anthropic/claude-3-haiku'
+  const modelId = options.modelId || 'openrouter/auto'
 
   const requestBody = {
     model: modelId,
     messages: convertMessages(messages, options.systemPrompt),
     temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2048,
-    top_p: options.topP ?? 1,
-    stop: options.stopSequences,
+    maxTokens: options.maxTokens ?? 2048,
+    stream: false,
   }
 
-  const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
+  const response = await fetch(CHAT_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'PDFLover',
     },
     body: JSON.stringify(requestBody),
   })
 
   if (!response.ok) {
-    const errorData = (await response.json()) as OpenRouterError
-    throw new Error(
-      errorData.error?.message || `OpenRouter API error: ${response.status}`
-    )
+    throw new Error(await responseError(response))
   }
 
   const data = (await response.json()) as OpenRouterResponse
@@ -285,37 +202,28 @@ export async function sendChatCompletion(
  */
 export async function* streamChatCompletion(
   messages: Message[],
-  apiKey: string,
   options: Partial<ChatOptions> = {}
 ): AsyncGenerator<ChatStreamChunk> {
-  const modelId = options.modelId || 'anthropic/claude-3-haiku'
+  const modelId = options.modelId || 'openrouter/auto'
 
   const requestBody = {
     model: modelId,
     messages: convertMessages(messages, options.systemPrompt),
     temperature: options.temperature ?? 0.7,
-    max_tokens: options.maxTokens ?? 2048,
-    top_p: options.topP ?? 1,
-    stop: options.stopSequences,
+    maxTokens: options.maxTokens ?? 2048,
     stream: true,
   }
 
-  const response = await fetch(`${OPENROUTER_API_URL}/chat/completions`, {
+  const response = await fetch(CHAT_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-      'HTTP-Referer': window.location.origin,
-      'X-Title': 'PDFLover',
     },
     body: JSON.stringify(requestBody),
   })
 
   if (!response.ok) {
-    const errorData = (await response.json()) as OpenRouterError
-    throw new Error(
-      errorData.error?.message || `OpenRouter API error: ${response.status}`
-    )
+    throw new Error(await responseError(response))
   }
 
   const reader = response.body?.getReader()
@@ -377,98 +285,4 @@ export async function* streamChatCompletion(
   } finally {
     reader.releaseLock()
   }
-}
-
-/**
- * Validate an OpenRouter API key
- */
-export async function validateApiKey(apiKey: string): Promise<{
-  valid: boolean
-  error?: string
-}> {
-  try {
-    const response = await fetch(`${OPENROUTER_API_URL}/auth/key`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    })
-
-    if (response.ok) {
-      return { valid: true }
-    }
-
-    const errorData = (await response.json()) as OpenRouterError
-    return {
-      valid: false,
-      error: errorData.error?.message || 'Invalid API key',
-    }
-  } catch (error) {
-    return {
-      valid: false,
-      error: error instanceof Error ? error.message : 'Failed to validate API key',
-    }
-  }
-}
-
-/**
- * Get available models from OpenRouter
- */
-export async function fetchAvailableModels(apiKey: string): Promise<AIModelInfo[]> {
-  try {
-    const response = await fetch(`${OPENROUTER_API_URL}/models`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch models')
-    }
-
-    const data = (await response.json()) as {
-      data: Array<{
-        id: string
-        name: string
-        context_length: number
-        pricing: {
-          prompt: string
-          completion: string
-        }
-      }>
-    }
-
-    return data.data.map((model) => ({
-      id: model.id,
-      name: model.name,
-      provider: 'openrouter' as const,
-      contextWindow: model.context_length,
-      maxOutputTokens: Math.min(model.context_length / 4, 8192),
-      supportsVision: model.id.includes('vision') || model.id.includes('4o'),
-      supportsFunctionCalling: model.id.includes('gpt') || model.id.includes('claude'),
-      inputCostPer1K: parseFloat(model.pricing.prompt) * 1000,
-      outputCostPer1K: parseFloat(model.pricing.completion) * 1000,
-      isLocal: false,
-    }))
-  } catch {
-    // Return default models on error
-    return OPENROUTER_MODELS
-  }
-}
-
-/**
- * Estimate cost for a completion
- */
-export function estimateCost(
-  modelId: string,
-  promptTokens: number,
-  completionTokens: number
-): number {
-  const model = OPENROUTER_MODELS.find((m) => m.id === modelId)
-  if (!model) return 0
-
-  const inputCost = (promptTokens / 1000) * (model.inputCostPer1K ?? 0)
-  const outputCost = (completionTokens / 1000) * (model.outputCostPer1K ?? 0)
-
-  return inputCost + outputCost
 }

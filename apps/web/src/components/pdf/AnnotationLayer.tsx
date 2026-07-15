@@ -3,8 +3,8 @@
  * Canvas overlay for rendering and editing annotations on PDF pages
  */
 
-import * as React from 'react';
-import { cn } from '@/lib/utils';
+import * as React from "react";
+import { cn } from "@/lib/utils";
 import {
   useAnnotationStore,
   type Annotation,
@@ -12,7 +12,7 @@ import {
   type Rect,
   type AnnotationTool,
   type Color,
-} from '@/store/annotation-store';
+} from "@/store/annotation-store";
 
 /**
  * Props for AnnotationLayer component
@@ -60,7 +60,7 @@ const HANDLE_SIZE = 8;
 function drawSelectionHandles(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
-  scale: number
+  scale: number,
 ): void {
   const x = rect.x * scale;
   const y = rect.y * scale;
@@ -68,14 +68,14 @@ function drawSelectionHandles(
   const height = rect.height * scale;
   const halfHandle = HANDLE_SIZE / 2;
 
-  ctx.strokeStyle = '#0066cc';
+  ctx.strokeStyle = "#0066cc";
   ctx.lineWidth = 2;
   ctx.setLineDash([5, 5]);
   ctx.strokeRect(x, y, width, height);
   ctx.setLineDash([]);
 
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = '#0066cc';
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "#0066cc";
   ctx.lineWidth = 1;
 
   // Corner handles
@@ -103,7 +103,7 @@ function drawSelectionHandles(
 function drawHighlight(
   ctx: CanvasRenderingContext2D,
   annotation: Annotation,
-  scale: number
+  scale: number,
 ): void {
   const { rect, color, opacity } = annotation;
 
@@ -112,7 +112,7 @@ function drawHighlight(
     rect.x * scale,
     rect.y * scale,
     rect.width * scale,
-    rect.height * scale
+    rect.height * scale,
   );
 }
 
@@ -122,7 +122,7 @@ function drawHighlight(
 function drawUnderline(
   ctx: CanvasRenderingContext2D,
   annotation: Annotation,
-  scale: number
+  scale: number,
 ): void {
   const { rect, color, opacity } = annotation;
 
@@ -140,7 +140,7 @@ function drawUnderline(
 function drawStrikethrough(
   ctx: CanvasRenderingContext2D,
   annotation: Annotation,
-  scale: number
+  scale: number,
 ): void {
   const { rect, color, opacity } = annotation;
   const middleY = rect.y + rect.height / 2;
@@ -158,29 +158,29 @@ function drawStrikethrough(
  */
 function drawText(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'text' },
-  scale: number
+  annotation: Annotation & { type: "text" },
+  scale: number,
 ): void {
   const { rect, color, opacity, content, fontSize, fontFamily } = annotation;
 
   ctx.fillStyle = colorToRgba(color, opacity);
   ctx.font = `${fontSize * scale}px ${fontFamily}`;
-  ctx.textBaseline = 'top';
+  ctx.textBaseline = "top";
 
   // Word wrap
-  const words = content.split(' ');
-  let line = '';
+  const words = content.split(" ");
+  let line = "";
   let y = rect.y * scale;
   const maxWidth = rect.width * scale;
   const lineHeight = fontSize * scale * 1.2;
 
   for (const word of words) {
-    const testLine = line + word + ' ';
+    const testLine = line + word + " ";
     const metrics = ctx.measureText(testLine);
 
-    if (metrics.width > maxWidth && line !== '') {
+    if (metrics.width > maxWidth && line !== "") {
       ctx.fillText(line, rect.x * scale, y);
-      line = word + ' ';
+      line = word + " ";
       y += lineHeight;
     } else {
       line = testLine;
@@ -194,8 +194,8 @@ function drawText(
  */
 function drawNote(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'note' },
-  scale: number
+  annotation: Annotation & { type: "note" },
+  scale: number,
 ): void {
   const { rect, color } = annotation;
   const size = 20 * scale;
@@ -210,12 +210,12 @@ function drawNote(
   ctx.strokeRect(rect.x * scale, rect.y * scale, size, size);
 
   // Draw 'N' indicator
-  ctx.fillStyle = '#000000';
+  ctx.fillStyle = "#000000";
   ctx.font = `${12 * scale}px sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('N', rect.x * scale + size / 2, rect.y * scale + size / 2);
-  ctx.textAlign = 'left';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("N", rect.x * scale + size / 2, rect.y * scale + size / 2);
+  ctx.textAlign = "left";
 }
 
 /**
@@ -223,15 +223,15 @@ function drawNote(
  */
 function drawFreehand(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'freehand' },
-  scale: number
+  annotation: Annotation & { type: "freehand" },
+  scale: number,
 ): void {
   const { paths, color, opacity, strokeWidth } = annotation;
 
   ctx.strokeStyle = colorToRgba(color, opacity);
   ctx.lineWidth = strokeWidth * scale;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
 
   for (const path of paths) {
     if (path.length < 2) continue;
@@ -252,10 +252,11 @@ function drawFreehand(
  */
 function drawShape(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'rectangle' | 'circle' | 'ellipse' },
-  scale: number
+  annotation: Annotation & { type: "rectangle" | "circle" | "ellipse" },
+  scale: number,
 ): void {
-  const { rect, type, strokeColor, strokeWidth, filled, fillColor, opacity } = annotation;
+  const { rect, type, strokeColor, strokeWidth, filled, fillColor, opacity } =
+    annotation;
 
   ctx.strokeStyle = colorToRgba(strokeColor, opacity);
   ctx.lineWidth = strokeWidth * scale;
@@ -269,16 +270,17 @@ function drawShape(
   const width = rect.width * scale;
   const height = rect.height * scale;
 
-  if (type === 'rectangle') {
+  if (type === "rectangle") {
     if (filled) {
       ctx.fillRect(x, y, width, height);
     }
     ctx.strokeRect(x, y, width, height);
-  } else if (type === 'circle' || type === 'ellipse') {
+  } else if (type === "circle" || type === "ellipse") {
     const centerX = x + width / 2;
     const centerY = y + height / 2;
     const radiusX = width / 2;
-    const radiusY = type === 'circle' ? Math.min(radiusX, height / 2) : height / 2;
+    const radiusY =
+      type === "circle" ? Math.min(radiusX, height / 2) : height / 2;
 
     ctx.beginPath();
     ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, Math.PI * 2);
@@ -294,14 +296,14 @@ function drawShape(
  */
 function drawLine(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'line' },
-  scale: number
+  annotation: Annotation & { type: "line" },
+  scale: number,
 ): void {
   const { startPoint, endPoint, color, opacity, strokeWidth } = annotation;
 
   ctx.strokeStyle = colorToRgba(color, opacity);
   ctx.lineWidth = strokeWidth * scale;
-  ctx.lineCap = 'round';
+  ctx.lineCap = "round";
 
   ctx.beginPath();
   ctx.moveTo(startPoint.x * scale, startPoint.y * scale);
@@ -314,15 +316,15 @@ function drawLine(
  */
 function drawArrow(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'arrow' },
-  scale: number
+  annotation: Annotation & { type: "arrow" },
+  scale: number,
 ): void {
   const { startPoint, endPoint, color, opacity, strokeWidth } = annotation;
 
   ctx.strokeStyle = colorToRgba(color, opacity);
   ctx.fillStyle = colorToRgba(color, opacity);
   ctx.lineWidth = strokeWidth * scale;
-  ctx.lineCap = 'round';
+  ctx.lineCap = "round";
 
   const startX = startPoint.x * scale;
   const startY = startPoint.y * scale;
@@ -358,8 +360,8 @@ function drawArrow(
  */
 function drawRedaction(
   ctx: CanvasRenderingContext2D,
-  annotation: Annotation & { type: 'redaction' },
-  scale: number
+  annotation: Annotation & { type: "redaction" },
+  scale: number,
 ): void {
   const { rect, applied } = annotation;
 
@@ -370,14 +372,14 @@ function drawRedaction(
 
   if (applied) {
     // Solid black for applied redactions
-    ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+    ctx.fillStyle = "rgba(0, 0, 0, 1)";
     ctx.fillRect(x, y, width, height);
   } else {
     // Semi-transparent red for pending redactions
-    ctx.fillStyle = 'rgba(200, 0, 0, 0.3)';
+    ctx.fillStyle = "rgba(200, 0, 0, 0.3)";
     ctx.fillRect(x, y, width, height);
 
-    ctx.strokeStyle = 'rgba(200, 0, 0, 1)';
+    ctx.strokeStyle = "rgba(200, 0, 0, 1)";
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, width, height);
 
@@ -429,7 +431,7 @@ export function AnnotationLayer({
   // Get annotations for this page
   const pageAnnotations = React.useMemo(
     () => getAnnotationsForPage(pageNum),
-    [getAnnotationsForPage, pageNum, annotations]
+    [getAnnotationsForPage, pageNum, annotations],
   );
 
   // Render annotations on canvas
@@ -437,7 +439,7 @@ export function AnnotationLayer({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     // Clear canvas
@@ -454,36 +456,36 @@ export function AnnotationLayer({
     // Draw each annotation
     for (const annotation of pageAnnotations) {
       switch (annotation.type) {
-        case 'highlight':
+        case "highlight":
           drawHighlight(ctx, annotation, scale);
           break;
-        case 'underline':
+        case "underline":
           drawUnderline(ctx, annotation, scale);
           break;
-        case 'strikethrough':
+        case "strikethrough":
           drawStrikethrough(ctx, annotation, scale);
           break;
-        case 'text':
+        case "text":
           drawText(ctx, annotation, scale);
           break;
-        case 'note':
+        case "note":
           drawNote(ctx, annotation, scale);
           break;
-        case 'freehand':
+        case "freehand":
           drawFreehand(ctx, annotation, scale);
           break;
-        case 'rectangle':
-        case 'circle':
-        case 'ellipse':
+        case "rectangle":
+        case "circle":
+        case "ellipse":
           drawShape(ctx, annotation, scale);
           break;
-        case 'line':
+        case "line":
           drawLine(ctx, annotation, scale);
           break;
-        case 'arrow':
+        case "arrow":
           drawArrow(ctx, annotation, scale);
           break;
-        case 'redaction':
+        case "redaction":
           drawRedaction(ctx, annotation, scale);
           break;
       }
@@ -498,8 +500,8 @@ export function AnnotationLayer({
     if (currentPath.length > 1) {
       ctx.strokeStyle = colorToRgba(toolOptions.color, toolOptions.opacity);
       ctx.lineWidth = toolOptions.strokeWidth * scale;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
 
       ctx.beginPath();
       ctx.moveTo(currentPath[0].x * scale, currentPath[0].y * scale);
@@ -541,7 +543,7 @@ export function AnnotationLayer({
         y: (e.clientY - rect.top) / scale,
       };
     },
-    [scale]
+    [scale],
   );
 
   // Find annotation at point
@@ -563,7 +565,7 @@ export function AnnotationLayer({
       }
       return null;
     },
-    [pageAnnotations]
+    [pageAnnotations],
   );
 
   // Handle mouse down
@@ -573,14 +575,14 @@ export function AnnotationLayer({
 
       const point = getCanvasPoint(e);
 
-      if (currentTool === 'select' || currentTool === 'hand') {
+      if (currentTool === "select" || currentTool === "hand") {
         const annotation = findAnnotationAtPoint(point);
         selectAnnotation(annotation?.id ?? null);
 
         if (annotation) {
           onAnnotationClick?.(annotation);
         }
-      } else if (currentTool === 'freehand') {
+      } else if (currentTool === "freehand") {
         isDrawing.current = true;
         startPath(point);
         lastPoint.current = point;
@@ -598,7 +600,7 @@ export function AnnotationLayer({
       selectAnnotation,
       startPath,
       onAnnotationClick,
-    ]
+    ],
   );
 
   // Handle mouse move
@@ -608,13 +610,11 @@ export function AnnotationLayer({
 
       const point = getCanvasPoint(e);
 
-      if (currentTool === 'freehand') {
+      if (currentTool === "freehand") {
         addToPath(point);
       }
-
-      lastPoint.current = point;
     },
-    [editable, currentTool, getCanvasPoint, addToPath]
+    [editable, currentTool, getCanvasPoint, addToPath],
   );
 
   // Handle mouse up
@@ -624,7 +624,7 @@ export function AnnotationLayer({
 
       const point = getCanvasPoint(e);
 
-      if (currentTool === 'freehand') {
+      if (currentTool === "freehand") {
         endPath(pageNum);
       } else if (lastPoint.current && currentTool) {
         // Create shape annotation
@@ -638,9 +638,9 @@ export function AnnotationLayer({
 
         if (rect.width > 5 && rect.height > 5) {
           switch (currentTool) {
-            case 'highlight':
+            case "highlight":
               addAnnotation({
-                type: 'highlight',
+                type: "highlight",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -648,9 +648,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'underline':
+            case "underline":
               addAnnotation({
-                type: 'underline',
+                type: "underline",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -658,9 +658,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'strikethrough':
+            case "strikethrough":
               addAnnotation({
-                type: 'strikethrough',
+                type: "strikethrough",
                 pageNum,
                 rect,
                 color: { r: 1, g: 0, b: 0 },
@@ -668,9 +668,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'rectangle':
+            case "rectangle":
               addAnnotation({
-                type: 'rectangle',
+                type: "rectangle",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -682,9 +682,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'circle':
+            case "circle":
               addAnnotation({
-                type: 'circle',
+                type: "circle",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -696,9 +696,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'ellipse':
+            case "ellipse":
               addAnnotation({
-                type: 'ellipse',
+                type: "ellipse",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -710,9 +710,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'line':
+            case "line":
               addAnnotation({
-                type: 'line',
+                type: "line",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -723,9 +723,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'arrow':
+            case "arrow":
               addAnnotation({
-                type: 'arrow',
+                type: "arrow",
                 pageNum,
                 rect,
                 color: toolOptions.color,
@@ -736,9 +736,9 @@ export function AnnotationLayer({
                 locked: false,
               });
               break;
-            case 'redact':
+            case "redact":
               addAnnotation({
-                type: 'redaction',
+                type: "redaction",
                 pageNum,
                 rect,
                 color: { r: 0, g: 0, b: 0 },
@@ -764,7 +764,7 @@ export function AnnotationLayer({
       addAnnotation,
       endPath,
       clearPath,
-    ]
+    ],
   );
 
   // Handle double click
@@ -777,23 +777,23 @@ export function AnnotationLayer({
 
       if (annotation) {
         onAnnotationDoubleClick?.(annotation);
-      } else if (currentTool === 'text' || currentTool === 'note') {
+      } else if (currentTool === "text" || currentTool === "note") {
         // Create text/note annotation at click position
         const rect: Rect = {
           x: point.x,
           y: point.y,
-          width: currentTool === 'note' ? 20 : 200,
-          height: currentTool === 'note' ? 20 : 50,
+          width: currentTool === "note" ? 20 : 200,
+          height: currentTool === "note" ? 20 : 50,
         };
 
-        if (currentTool === 'text') {
+        if (currentTool === "text") {
           addAnnotation({
-            type: 'text',
+            type: "text",
             pageNum,
             rect,
             color: toolOptions.color,
             opacity: toolOptions.opacity,
-            content: 'Double-click to edit',
+            content: "Double-click to edit",
             fontSize: toolOptions.fontSize,
             fontFamily: toolOptions.fontFamily,
             bold: false,
@@ -802,13 +802,13 @@ export function AnnotationLayer({
           });
         } else {
           addAnnotation({
-            type: 'note',
+            type: "note",
             pageNum,
             rect,
             color: { r: 1, g: 1, b: 0 },
             opacity: 1,
-            title: 'Note',
-            content: '',
+            title: "Note",
+            content: "",
             isOpen: false,
             locked: false,
           });
@@ -824,35 +824,35 @@ export function AnnotationLayer({
       findAnnotationAtPoint,
       addAnnotation,
       onAnnotationDoubleClick,
-    ]
+    ],
   );
 
   // Get cursor style based on current tool
   const getCursor = (): string => {
-    if (!editable) return 'default';
+    if (!editable) return "default";
 
     switch (currentTool) {
-      case 'select':
-        return 'default';
-      case 'hand':
-        return 'grab';
-      case 'freehand':
-        return 'crosshair';
-      case 'text':
-      case 'note':
-        return 'text';
-      case 'highlight':
-      case 'underline':
-      case 'strikethrough':
-      case 'rectangle':
-      case 'circle':
-      case 'ellipse':
-      case 'line':
-      case 'arrow':
-      case 'redact':
-        return 'crosshair';
+      case "select":
+        return "default";
+      case "hand":
+        return "grab";
+      case "freehand":
+        return "crosshair";
+      case "text":
+      case "note":
+        return "text";
+      case "highlight":
+      case "underline":
+      case "strikethrough":
+      case "rectangle":
+      case "circle":
+      case "ellipse":
+      case "line":
+      case "arrow":
+      case "redact":
+        return "crosshair";
       default:
-        return 'default';
+        return "default";
     }
   };
 
@@ -861,10 +861,7 @@ export function AnnotationLayer({
       ref={canvasRef}
       width={width}
       height={height}
-      className={cn(
-        'absolute inset-0 pointer-events-auto',
-        className
-      )}
+      className={cn("absolute inset-0 pointer-events-auto", className)}
       style={{ cursor: getCursor() }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -879,6 +876,6 @@ export function AnnotationLayer({
   );
 }
 
-AnnotationLayer.displayName = 'AnnotationLayer';
+AnnotationLayer.displayName = "AnnotationLayer";
 
 export default AnnotationLayer;

@@ -75,7 +75,6 @@ export interface RAGResponseOptions {
   /** Model ID */
   modelId: string
   /** API key for cloud providers */
-  apiKey?: string
   /** Temperature for generation */
   temperature?: number
   /** Maximum tokens to generate */
@@ -336,7 +335,6 @@ export async function generateRAGResponse(
   const {
     provider,
     modelId,
-    apiKey,
     temperature = 0.7,
     maxTokens = 1024,
     customSystemPrompt,
@@ -373,12 +371,8 @@ export async function generateRAGResponse(
 
     return response
   } else {
-    // Cloud provider (OpenRouter)
-    if (!apiKey) {
-      throw new Error('API key required for cloud AI provider')
-    }
-
-    const response = await sendChatCompletion(messages, apiKey, {
+    // Cloud provider (OpenRouter through the backend proxy)
+    const response = await sendChatCompletion(messages, {
       modelId,
       systemPrompt,
       temperature,
@@ -409,7 +403,6 @@ export async function* generateRAGResponseStream(
   const {
     provider,
     modelId,
-    apiKey,
     temperature = 0.7,
     maxTokens = 1024,
     customSystemPrompt,
@@ -440,12 +433,8 @@ export async function* generateRAGResponseStream(
       maxTokens,
     })
   } else {
-    // Cloud provider (OpenRouter)
-    if (!apiKey) {
-      throw new Error('API key required for cloud AI provider')
-    }
-
-    yield* streamChatCompletion(messages, apiKey, {
+    // Cloud provider (OpenRouter through the backend proxy)
+    yield* streamChatCompletion(messages, {
       modelId,
       systemPrompt,
       temperature,

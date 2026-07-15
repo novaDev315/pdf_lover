@@ -490,11 +490,13 @@ export function KeyInfoDashboard({
                 value={extractedInfo.summary.pagesWithContent.length}
                 color="green"
               />
-              {extractedInfo.summary.totalAmountUSD !== undefined && (
+              {Object.keys(extractedInfo.summary.totalsByCurrency).length > 0 && (
                 <StatCard
                   icon={<DollarSign className="h-4 w-4" />}
-                  label="Total (USD)"
-                  value={`$${extractedInfo.summary.totalAmountUSD.toLocaleString(undefined, { maximumFractionDigits: 2 })}`}
+                  label="Totals by Currency"
+                  value={Object.entries(extractedInfo.summary.totalsByCurrency)
+                    .map(([currency, value]) => `${currency} ${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`)
+                    .join(' · ')}
                   color="amber"
                 />
               )}

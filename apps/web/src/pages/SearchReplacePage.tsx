@@ -391,6 +391,10 @@ export function SearchReplacePage() {
             </li>
             <li className="flex items-start gap-2">
               <span className="text-primary-500">-</span>
+              Replacement draws new visible text over the old content; it is not secure redaction and the original text may remain extractable
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-primary-500">-</span>
               All processing happens locally - your files never leave your device
             </li>
           </ul>

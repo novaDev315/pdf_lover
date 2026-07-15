@@ -2,11 +2,11 @@
  * Tests for usePdfDocument hook
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { renderHook, act, waitFor } from "@testing-library/react";
 
 // Mock pdfjs-dist before importing the hook
-vi.mock('pdfjs-dist', () => {
+vi.mock("pdfjs-dist", () => {
   const mockPage = {
     getViewport: vi.fn(({ scale = 1 }) => ({
       width: 612 * scale,
@@ -22,18 +22,18 @@ vi.mock('pdfjs-dist', () => {
     getPage: vi.fn().mockResolvedValue(mockPage),
     getMetadata: vi.fn().mockResolvedValue({
       info: {
-        Title: 'Test Document',
-        Author: 'Test Author',
-        Subject: 'Test Subject',
-        Keywords: 'test, pdf, document',
-        Creator: 'Test Creator',
-        Producer: 'Test Producer',
-        CreationDate: 'D:20240115120000',
-        ModDate: 'D:20240116120000',
+        Title: "Test Document",
+        Author: "Test Author",
+        Subject: "Test Subject",
+        Keywords: "test, pdf, document",
+        Creator: "Test Creator",
+        Producer: "Test Producer",
+        CreationDate: "D:20240115120000",
+        ModDate: "D:20240116120000",
       },
       metadata: {
         get: vi.fn((key) => {
-          if (key === 'pdf:PDFVersion') return '1.7';
+          if (key === "pdf:PDFVersion") return "1.7";
           return null;
         }),
       },
@@ -43,13 +43,15 @@ vi.mock('pdfjs-dist', () => {
 
   const mockLoadingTask = {
     promise: Promise.resolve(mockDocument),
-    onProgress: null as ((data: { loaded: number; total: number }) => void) | null,
+    onProgress: null as
+      | ((data: { loaded: number; total: number }) => void)
+      | null,
     destroy: vi.fn(),
   };
 
   return {
     GlobalWorkerOptions: {
-      workerSrc: '',
+      workerSrc: "",
     },
     getDocument: vi.fn(() => {
       // Simulate progress callbacks
@@ -73,8 +75,8 @@ vi.mock('pdfjs-dist', () => {
 });
 
 // Import hook after mocking
-import { usePdfDocument } from '../../hooks/usePdfDocument';
-import * as pdfjs from 'pdfjs-dist';
+import { usePdfDocument } from "../../hooks/usePdfDocument";
+import * as pdfjs from "pdfjs-dist";
 
 // Create mock PDF buffer
 const createMockPdfBuffer = (): ArrayBuffer => {
@@ -91,10 +93,10 @@ const createMockPdfBuffer = (): ArrayBuffer => {
 // Create mock file
 const createMockPdfFile = (): File => {
   const buffer = createMockPdfBuffer();
-  return new File([buffer], 'test.pdf', { type: 'application/pdf' });
+  return new File([buffer], "test.pdf", { type: "application/pdf" });
 };
 
-describe('usePdfDocument', () => {
+describe("usePdfDocument", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (pdfjs as any).__resetMocks?.();
@@ -104,11 +106,11 @@ describe('usePdfDocument', () => {
     vi.clearAllMocks();
   });
 
-  describe('initial state', () => {
-    it('should have idle loading state initially', () => {
+  describe("initial state", () => {
+    it("should have idle loading state initially", () => {
       const { result } = renderHook(() => usePdfDocument());
 
-      expect(result.current.loadingState).toBe('idle');
+      expect(result.current.loadingState).toBe("idle");
       expect(result.current.pdfDocument).toBeNull();
       expect(result.current.error).toBeNull();
       expect(result.current.progress).toBe(0);
@@ -116,8 +118,8 @@ describe('usePdfDocument', () => {
     });
   });
 
-  describe('loadFromArrayBuffer', () => {
-    it('should load PDF from ArrayBuffer', async () => {
+  describe("loadFromArrayBuffer", () => {
+    it("should load PDF from ArrayBuffer", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -126,7 +128,7 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       expect(result.current.pdfDocument).toBeDefined();
@@ -134,7 +136,37 @@ describe('usePdfDocument', () => {
       expect(result.current.metadata?.pageCount).toBe(5);
     });
 
-    it('should extract metadata correctly', async () => {
+    it("passes an owned copy to PDF.js so the caller buffer remains reusable", async () => {
+      const { result } = renderHook(() => usePdfDocument());
+      const buffer = createMockPdfBuffer();
+
+      await act(async () => {
+        await result.current.loadFromArrayBuffer(buffer);
+      });
+
+      const source = vi.mocked(pdfjs.getDocument).mock.calls[0]?.[0] as {
+        data?: Uint8Array;
+      };
+      expect(source.data).toBeInstanceOf(Uint8Array);
+      expect(source.data?.buffer).not.toBe(buffer);
+      expect(new Uint8Array(buffer).slice(0, 5)).toEqual(
+        new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]),
+      );
+    });
+
+    it("keeps loader callbacks stable after the document state changes", async () => {
+      const { result } = renderHook(() => usePdfDocument());
+      const loadFromArrayBuffer = result.current.loadFromArrayBuffer;
+
+      await act(async () => {
+        await result.current.loadFromArrayBuffer(createMockPdfBuffer());
+      });
+
+      expect(result.current.loadingState).toBe("loaded");
+      expect(result.current.loadFromArrayBuffer).toBe(loadFromArrayBuffer);
+    });
+
+    it("should extract metadata correctly", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -143,16 +175,16 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
-      expect(result.current.metadata?.title).toBe('Test Document');
-      expect(result.current.metadata?.author).toBe('Test Author');
+      expect(result.current.metadata?.title).toBe("Test Document");
+      expect(result.current.metadata?.author).toBe("Test Author");
     });
   });
 
-  describe('loadFromFile', () => {
-    it('should load PDF from File object', async () => {
+  describe("loadFromFile", () => {
+    it("should load PDF from File object", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const file = createMockPdfFile();
 
@@ -161,29 +193,29 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       expect(result.current.pdfDocument).toBeDefined();
     });
 
-    it('should reject non-PDF files', async () => {
+    it("should reject non-PDF files", async () => {
       const { result } = renderHook(() => usePdfDocument());
-      const file = new File(['test'], 'test.txt', { type: 'text/plain' });
+      const file = new File(["test"], "test.txt", { type: "text/plain" });
 
       await act(async () => {
         await result.current.loadFromFile(file);
       });
 
-      expect(result.current.loadingState).toBe('error');
-      expect(result.current.error).toContain('Invalid file type');
+      expect(result.current.loadingState).toBe("error");
+      expect(result.current.error).toContain("Invalid file type");
     });
 
-    it('should accept files with .pdf extension', async () => {
+    it("should accept files with .pdf extension", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
-      const file = new File([buffer], 'document.pdf', {
-        type: 'application/octet-stream',
+      const file = new File([buffer], "document.pdf", {
+        type: "application/octet-stream",
       });
 
       await act(async () => {
@@ -191,31 +223,31 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
     });
   });
 
-  describe('loadFromUrl', () => {
-    it('should load PDF from URL', async () => {
+  describe("loadFromUrl", () => {
+    it("should load PDF from URL", async () => {
       const { result } = renderHook(() => usePdfDocument());
 
       await act(async () => {
-        await result.current.loadFromUrl('https://example.com/test.pdf');
+        await result.current.loadFromUrl("https://example.com/test.pdf");
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       expect(pdfjs.getDocument).toHaveBeenCalledWith(
-        expect.objectContaining({ url: 'https://example.com/test.pdf' })
+        expect.objectContaining({ url: "https://example.com/test.pdf" }),
       );
     });
   });
 
-  describe('closeDocument', () => {
-    it('should close and cleanup document', async () => {
+  describe("closeDocument", () => {
+    it("should close and cleanup document", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -224,7 +256,7 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       act(() => {
@@ -233,13 +265,13 @@ describe('usePdfDocument', () => {
 
       expect(result.current.pdfDocument).toBeNull();
       expect(result.current.metadata).toBeNull();
-      expect(result.current.loadingState).toBe('idle');
+      expect(result.current.loadingState).toBe("idle");
       expect(result.current.progress).toBe(0);
     });
   });
 
-  describe('callbacks', () => {
-    it('should call onLoad callback when document is loaded', async () => {
+  describe("callbacks", () => {
+    it("should call onLoad callback when document is loaded", async () => {
       const onLoad = vi.fn();
       const { result } = renderHook(() => usePdfDocument({ onLoad }));
       const buffer = createMockPdfBuffer();
@@ -249,16 +281,16 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       expect(onLoad).toHaveBeenCalledWith(
-        expect.objectContaining({ pageCount: 5 })
+        expect.objectContaining({ pageCount: 5 }),
       );
     });
 
-    it('should call onError callback when loading fails', async () => {
-      (pdfjs as any).__setLoadError?.(new Error('Load failed'));
+    it("should call onError callback when loading fails", async () => {
+      (pdfjs as any).__setLoadError?.(new Error("Load failed"));
 
       const onError = vi.fn();
       const { result } = renderHook(() => usePdfDocument({ onError }));
@@ -269,13 +301,15 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('error');
+        expect(result.current.loadingState).toBe("error");
       });
 
-      expect(onError).toHaveBeenCalledWith(expect.stringContaining('Load failed'));
+      expect(onError).toHaveBeenCalledWith(
+        expect.stringContaining("Load failed"),
+      );
     });
 
-    it('should call onProgress callback during loading', async () => {
+    it("should call onProgress callback during loading", async () => {
       const onProgress = vi.fn();
       const { result } = renderHook(() => usePdfDocument({ onProgress }));
       const buffer = createMockPdfBuffer();
@@ -285,7 +319,7 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       // Progress should have been called with values
@@ -293,8 +327,8 @@ describe('usePdfDocument', () => {
     });
   });
 
-  describe('renderPage', () => {
-    it('should render a page to canvas', async () => {
+  describe("renderPage", () => {
+    it("should render a page to canvas", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -303,15 +337,15 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       const mockContext = {
         fillRect: vi.fn(),
         clearRect: vi.fn(),
       };
-      vi.spyOn(canvas, 'getContext').mockReturnValue(mockContext as any);
+      vi.spyOn(canvas, "getContext").mockReturnValue(mockContext as any);
 
       const dimensions = await result.current.renderPage(1, canvas, 1.0);
 
@@ -319,16 +353,16 @@ describe('usePdfDocument', () => {
       expect(dimensions.height).toBe(792);
     });
 
-    it('should throw error if no document is loaded', async () => {
+    it("should throw error if no document is loaded", async () => {
       const { result } = renderHook(() => usePdfDocument());
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
 
       await expect(result.current.renderPage(1, canvas)).rejects.toThrow(
-        'No PDF document loaded'
+        "No PDF document loaded",
       );
     });
 
-    it('should throw error for out of range page', async () => {
+    it("should throw error for out of range page", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -337,21 +371,21 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       const mockContext = { fillRect: vi.fn() };
-      vi.spyOn(canvas, 'getContext').mockReturnValue(mockContext as any);
+      vi.spyOn(canvas, "getContext").mockReturnValue(mockContext as any);
 
       await expect(result.current.renderPage(10, canvas)).rejects.toThrow(
-        'out of range'
+        "out of range",
       );
     });
   });
 
-  describe('getPageDimensions', () => {
-    it('should return page dimensions', async () => {
+  describe("getPageDimensions", () => {
+    it("should return page dimensions", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -360,7 +394,7 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       const dimensions = await result.current.getPageDimensions(1);
@@ -369,7 +403,7 @@ describe('usePdfDocument', () => {
       expect(dimensions.height).toBe(792);
     });
 
-    it('should apply scale to dimensions', async () => {
+    it("should apply scale to dimensions", async () => {
       const { result } = renderHook(() => usePdfDocument());
       const buffer = createMockPdfBuffer();
 
@@ -378,7 +412,7 @@ describe('usePdfDocument', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       const dimensions = await result.current.getPageDimensions(1, 2.0);
@@ -387,17 +421,17 @@ describe('usePdfDocument', () => {
       expect(dimensions.height).toBe(792 * 2);
     });
 
-    it('should throw error if no document is loaded', async () => {
+    it("should throw error if no document is loaded", async () => {
       const { result } = renderHook(() => usePdfDocument());
 
       await expect(result.current.getPageDimensions(1)).rejects.toThrow(
-        'No PDF document loaded'
+        "No PDF document loaded",
       );
     });
   });
 
-  describe('loading state transitions', () => {
-    it('should transition through loading states correctly', async () => {
+  describe("loading state transitions", () => {
+    it("should transition through loading states correctly", async () => {
       const states: string[] = [];
       const { result } = renderHook(() => usePdfDocument());
 
@@ -412,15 +446,15 @@ describe('usePdfDocument', () => {
       states.push(result.current.loadingState);
 
       await waitFor(() => {
-        expect(result.current.loadingState).toBe('loaded');
+        expect(result.current.loadingState).toBe("loaded");
       });
 
       states.push(result.current.loadingState);
 
       // Should have gone through idle -> loading -> loaded
-      expect(states).toContain('idle');
-      expect(states).toContain('loading');
-      expect(states[states.length - 1]).toBe('loaded');
+      expect(states).toContain("idle");
+      expect(states).toContain("loading");
+      expect(states[states.length - 1]).toBe("loaded");
     });
   });
 });

@@ -144,13 +144,18 @@ function generateHistoryId(): string {
 /**
  * Serialize history for persistence (without large data)
  */
-function serializeHistory(history: HistoryEntry[]): SerializedHistoryEntry[] {
+export function serializeHistory(history: HistoryEntry[]): SerializedHistoryEntry[] {
   return history.map((entry) => ({
     id: entry.id,
     type: entry.type,
     timestamp: entry.timestamp.toISOString(),
     description: entry.description,
-    canUndo: false, // After reload, undo data is lost
+    canUndo: Boolean(
+      entry.canUndo &&
+        entry.documentIds?.length === 1 &&
+        typeof entry.metadata?.beforeVersionId === 'string' &&
+        typeof entry.metadata?.afterVersionId === 'string',
+    ),
     documentIds: entry.documentIds,
     fileNames: entry.fileNames,
     fileSize: entry.fileSize,
@@ -161,13 +166,18 @@ function serializeHistory(history: HistoryEntry[]): SerializedHistoryEntry[] {
 /**
  * Deserialize history from persistence
  */
-function deserializeHistory(serialized: SerializedHistoryEntry[]): HistoryEntry[] {
+export function deserializeHistory(serialized: SerializedHistoryEntry[]): HistoryEntry[] {
   return serialized.map((entry) => ({
     ...entry,
     timestamp: new Date(entry.timestamp),
     before: null,
     after: null,
-    canUndo: false,
+    canUndo: Boolean(
+      entry.canUndo &&
+        entry.documentIds?.length === 1 &&
+        typeof entry.metadata?.beforeVersionId === 'string' &&
+        typeof entry.metadata?.afterVersionId === 'string',
+    ),
   }));
 }
 

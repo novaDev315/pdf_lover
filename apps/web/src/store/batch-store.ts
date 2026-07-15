@@ -18,6 +18,7 @@ export type BatchOperationType =
   | 'split'
   | 'ocr'
   | 'security'
+  | 'crop'
   | 'trim'
   | 'resize';
 
@@ -40,11 +41,13 @@ export interface MergeOptions {
 
 export interface CompressOptions {
   level: 'low' | 'medium' | 'high' | 'maximum';
+  serverConsent?: boolean;
 }
 
 export interface ConvertOptions {
-  format: 'pdf' | 'docx' | 'png' | 'jpg';
+  format: 'png' | 'jpg' | 'jpeg' | 'webp' | 'svg' | 'txt' | 'html' | 'docx' | 'xlsx' | 'pptx';
   quality?: number;
+  serverConsent?: boolean;
 }
 
 export interface WatermarkOptions {
@@ -64,10 +67,13 @@ export interface SplitOptions {
 export interface OCROptions {
   language: string;
   enhanceScans: boolean;
+  engine?: 'local' | 'server';
+  serverConsent?: boolean;
 }
 
 export interface SecurityOptions {
-  password?: string;
+  userPassword?: string;
+  ownerPassword?: string;
   permissions?: {
     print: boolean;
     copy: boolean;
@@ -81,11 +87,22 @@ export interface TrimOptions {
   uniformPadding?: boolean;
 }
 
+export interface CropOptions {
+  cropMode: 'percentage' | 'absolute';
+  boxType: 'MediaBox' | 'CropBox' | 'TrimBox' | 'BleedBox';
+  cropPercent?: { left: number; right: number; top: number; bottom: number };
+  cropBox?: { x: number; y: number; width: number; height: number };
+}
+
 export interface ResizeOptions {
-  resizeMode?: 'standard' | 'custom';
+  resizeMode?: 'preset' | 'custom';
+  preset?: string;
+  orientation?: 'portrait' | 'landscape';
   width?: number;
   height?: number;
   maintainAspectRatio?: boolean;
+  scaleContent?: boolean;
+  centerContent?: boolean;
 }
 
 export type BatchOperationOptions =
@@ -96,6 +113,7 @@ export type BatchOperationOptions =
   | SplitOptions
   | OCROptions
   | SecurityOptions
+  | CropOptions
   | TrimOptions
   | ResizeOptions;
 
@@ -114,12 +132,21 @@ export interface BatchFileInfo {
  */
 export interface BatchOperationResult {
   success: boolean;
+  /** All output artifacts produced by the operation. */
+  artifacts?: BatchOperationArtifact[];
+  /** First artifact data retained for older result consumers. */
   data?: ArrayBuffer;
   filename?: string;
   error?: string;
   processedAt: Date;
   processingTime: number;
   outputSize?: number;
+}
+
+export interface BatchOperationArtifact {
+  data: ArrayBuffer;
+  filename: string;
+  mediaType: string;
 }
 
 /**
@@ -450,16 +477,8 @@ export const useBatchStore = create<BatchStore>()(
     {
       name: 'pdflover-batch-store',
       partialize: (state) => ({
-        // Don't persist file data, only metadata
-        queue: state.queue.map((op) => ({
-          ...op,
-          files: op.files.map((f) => ({
-            id: f.id,
-            name: f.name,
-            size: f.size,
-            // Exclude File object from persistence
-          })),
-        })),
+        // A File cannot be reconstructed from localStorage metadata. Persisting
+        // a queue without its bytes creates operations that can never resume.
         isPanelOpen: state.isPanelOpen,
       }),
     }
@@ -533,6 +552,7 @@ export function getOperationTypeLabel(type: BatchOperationType): string {
     split: 'Split',
     ocr: 'OCR',
     security: 'Security',
+    crop: 'Crop',
     trim: 'Trim Margins',
     resize: 'Resize',
   };

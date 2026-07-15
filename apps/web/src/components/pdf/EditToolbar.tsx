@@ -50,6 +50,8 @@ export interface EditToolbarProps {
   isFullscreen?: boolean;
   /** Whether the toolbar is disabled */
   disabled?: boolean;
+  /** Whether annotation tools are available */
+  enableAnnotations?: boolean;
   /** Callback when page changes */
   onPageChange: (page: number) => void;
   /** Callback when zoom changes */
@@ -94,6 +96,7 @@ export function EditToolbar({
   activeTool = 'select',
   isFullscreen = false,
   disabled = false,
+  enableAnnotations = true,
   onPageChange,
   onZoomChange,
   onZoomModeChange,
@@ -237,23 +240,25 @@ export function EditToolbar({
         </Tooltip>
 
         {/* Highlight Tool */}
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={activeTool === 'highlight' ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => onToolChange?.('highlight')}
-              disabled={disabled}
-              aria-label="Highlight tool"
-              aria-pressed={activeTool === 'highlight'}
-            >
-              <Highlighter className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Highlight (L)</p>
-          </TooltipContent>
-        </Tooltip>
+        {enableAnnotations && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={activeTool === 'highlight' ? 'secondary' : 'ghost'}
+                size="icon"
+                onClick={() => onToolChange?.('highlight')}
+                disabled={disabled}
+                aria-label="Highlight tool"
+                aria-pressed={activeTool === 'highlight'}
+              >
+                <Highlighter className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Highlight (L)</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {/* Center Section: Page Navigation and Zoom */}

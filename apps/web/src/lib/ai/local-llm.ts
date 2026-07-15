@@ -44,14 +44,6 @@ export const LOCAL_MODELS: LocalModelConfig[] = [
     maxOutputTokens: 256,
     requiresWebGPU: false,
   },
-  {
-    id: 'Xenova/distilbert-base-uncased',
-    name: 'DistilBERT QA',
-    task: 'question-answering',
-    contextWindow: 512,
-    maxOutputTokens: 256,
-    requiresWebGPU: false,
-  },
 ]
 
 /**
@@ -294,11 +286,6 @@ export async function generateLocalResponse(
     message: responseMessage,
     model: modelId,
     finishReason: 'stop',
-    usage: {
-      promptTokens: prompt.length / 4, // Rough estimate
-      completionTokens: generatedText.length / 4,
-      totalTokens: (prompt.length + generatedText.length) / 4,
-    },
   }
 }
 
@@ -320,27 +307,14 @@ export async function* generateLocalResponseStream(
     }
   }
 
-  // For now, simulate streaming by yielding the full response in chunks
-  // Real streaming would require a model that supports it
+  // The current Transformers.js pipelines return a completed generation. Emit
+  // one truthful terminal chunk without artificial token timing.
   const response = await generateLocalResponse(messages, options)
-  const content = response.message.content
-  const words = content.split(' ')
-
-  // Yield word by word with small delays
-  for (let i = 0; i < words.length; i++) {
-    const isLast = i === words.length - 1
-    const chunk: ChatStreamChunk = {
-      id: generateId(),
-      delta: words[i] + (isLast ? '' : ' '),
-      isFinished: isLast,
-      finishReason: isLast ? 'stop' : undefined,
-    }
-    yield chunk
-
-    // Small delay to simulate streaming
-    if (!isLast) {
-      await new Promise((resolve) => setTimeout(resolve, 50))
-    }
+  yield {
+    id: generateId(),
+    delta: response.message.content,
+    isFinished: true,
+    finishReason: 'stop',
   }
 }
 

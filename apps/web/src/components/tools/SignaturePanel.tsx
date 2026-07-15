@@ -32,7 +32,7 @@ import {
 } from '@/lib/utils'
 import {
   signPDF,
-  getSignatures,
+  getVisualSignatures,
   type SignatureRect,
 } from '@pdflover/pdf-core'
 import type { ProgressInfo } from '@pdflover/shared'
@@ -253,13 +253,13 @@ export function SignaturePanel({ className }: SignaturePanelProps) {
       // Check for existing signatures
       try {
         const buffer = await selectedFile.arrayBuffer()
-        const signatures = await getSignatures(buffer)
+        const signatures = await getVisualSignatures(buffer)
         setExistingSignatures(signatures)
 
         if (signatures.length > 0) {
           toast({
-            title: 'Signatures detected',
-            description: `This PDF has ${signatures.length} existing signature(s)`,
+            title: 'Visual signature stamps detected',
+            description: `This PDF has ${signatures.length} PDFLover visual stamp(s)`,
           })
         }
       } catch {
@@ -485,13 +485,13 @@ export function SignaturePanel({ className }: SignaturePanelProps) {
           </div>
         )}
 
-        {/* Existing Signatures */}
+        {/* Existing visual signature stamps */}
         {existingSignatures.length > 0 && (
           <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 className="h-4 w-4 text-blue-600" />
               <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                Existing Signatures ({existingSignatures.length})
+                Existing Visual Stamps ({existingSignatures.length})
               </p>
             </div>
             <ul className="space-y-1">
