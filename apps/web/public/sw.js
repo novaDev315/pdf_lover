@@ -16,6 +16,7 @@ const CACHE_NAMES = {
 
 // Maximum size for AI model cache (500MB)
 const AI_MODEL_CACHE_LIMIT = 500 * 1024 * 1024;
+const SHARE_FILE_LIMIT = 200 * 1024 * 1024;
 
 // App shell - core assets required for offline functionality
 const APP_SHELL = [
@@ -218,6 +219,61 @@ async function cacheAIModel(request) {
   return cacheFirst(request, CACHE_NAMES.aiModels);
 }
 
+function openShareDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('PDFLoverShareTarget', 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains('pending')) {
+        request.result.createObjectStore('pending', { keyPath: 'id' });
+      }
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error || new Error('Failed to open share handoff'));
+  });
+}
+
+async function storeSharedFiles(files) {
+  const database = await openShareDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const transaction = database.transaction('pending', 'readwrite');
+      const store = transaction.objectStore('pending');
+      for (const file of files) {
+        const now = Date.now();
+        store.put({
+          id: crypto.randomUUID(),
+          file,
+          createdAt: now,
+          expiresAt: now + 60 * 60 * 1000,
+        });
+      }
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error || new Error('Failed to store shared PDF'));
+      transaction.onabort = () => reject(transaction.error || new Error('Shared PDF handoff was aborted'));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function handleShareTarget(request) {
+  const form = await request.formData();
+  const candidates = form.getAll('files').filter((value) => value instanceof File);
+  const valid = [];
+  for (const file of candidates) {
+    if (file.size === 0 || file.size > SHARE_FILE_LIMIT) continue;
+    if (file.type && file.type !== 'application/pdf') continue;
+    const header = new Uint8Array(await file.slice(0, 5).arrayBuffer());
+    if (String.fromCharCode(...header) !== '%PDF-') continue;
+    valid.push(file);
+  }
+  if (valid.length === 0) {
+    return Response.redirect(new URL('/files?shareError=invalid-pdf', self.location.origin), 303);
+  }
+  await storeSharedFiles(valid);
+  return Response.redirect(new URL('/files?shared=1', self.location.origin), 303);
+}
+
 /**
  * Fetch event handler
  */
@@ -225,7 +281,12 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = request.url;
 
-  // Skip non-GET requests
+  if (request.method === 'POST' && new URL(url).pathname === '/') {
+    event.respondWith(handleShareTarget(request));
+    return;
+  }
+
+  // Skip other non-GET requests
   if (request.method !== 'GET') {
     return;
   }

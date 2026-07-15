@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#18181b"/>
+  <rect x="82" y="83" width="464" height="464" rx="104" fill="#dc2626"/>
+  <path d="M217 158h126l66 66v248H217z" fill="#fff"/>
+  <path d="M343 158v66h66" fill="#fecaca"/>
+  <path d="M313 407c-43-31-69-55-69-90 0-24 17-43 41-43 13 0 23 7 28 16 6-9 16-16 29-16 24 0 41 19 41 43 0 35-26 59-70 90z" fill="#dc2626"/>
+  <text x="620" y="280" fill="#fff" font-family="sans-serif" font-size="86" font-weight="700">PDFLover</text>
+  <text x="620" y="355" fill="#d4d4d8" font-family="sans-serif" font-size="35">Local-first PDF workspace</text>
+  <text x="620" y="410" fill="#fca5a5" font-family="sans-serif" font-size="27">Real tools. Durable files. Explicit cloud boundaries.</text>
+</svg>

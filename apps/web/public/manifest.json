@@ -1,7 +1,7 @@
 {
   "name": "PDFLover",
   "short_name": "PDFLover",
-  "description": "Privacy-first PDF processing platform. Merge, split, compress, and convert PDFs directly in your browser.",
+  "description": "Local-first PDF processing with explicit temporary server jobs for secure operations.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "any",
@@ -70,22 +70,6 @@
     }
   ],
   "categories": ["productivity", "utilities"],
-  "screenshots": [
-    {
-      "src": "/screenshots/desktop-dashboard.png",
-      "sizes": "1920x1080",
-      "type": "image/png",
-      "form_factor": "wide",
-      "label": "PDFLover Dashboard - Your privacy-first PDF toolkit"
-    },
-    {
-      "src": "/screenshots/mobile-dashboard.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "PDFLover on Mobile"
-    }
-  ],
   "shortcuts": [
     {
       "name": "Merge PDFs",
@@ -109,6 +93,22 @@
       "icons": [{ "src": "/icons/shortcut-compress.png", "sizes": "96x96" }]
     }
   ],
+  "screenshots": [
+    {
+      "src": "/screenshots/dashboard-wide.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "PDFLover local-first dashboard"
+    },
+    {
+      "src": "/screenshots/dashboard-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "PDFLover dashboard on a narrow screen"
+    }
+  ],
   "share_target": {
     "action": "/",
     "method": "POST",
@@ -124,7 +124,7 @@
   },
   "file_handlers": [
     {
-      "action": "/",
+      "action": "/files",
       "accept": {
         "application/pdf": [".pdf"]
       }
