@@ -1,8 +1,8 @@
 /**
  * PDF signature functionality for @pdflover/pdf-core
  *
- * Provides digital signature operations for PDF documents.
- * Supports visual signatures (drawn, typed, or image-based).
+ * Provides visual signature stamps for PDF documents.
+ * This module does not create or verify certificate-backed digital signatures.
  * All processing runs in the browser using pdf-lib.
  */
 
@@ -124,7 +124,8 @@ export interface CreateFieldOptions {
 }
 
 /**
- * Signature verification result
+ * Visual signature inspection result. `verified` is always false because
+ * keyword metadata cannot prove document authenticity.
  */
 export interface VerificationResult {
   /** Whether verification was successful */
@@ -151,8 +152,8 @@ export interface SignatureInfo {
   location?: string;
   /** Page number */
   pageNumber: number;
-  /** Whether signature is valid (basic check) */
-  isValid: boolean;
+  /** This record describes a PDFLover visual stamp, not a digital signature. */
+  kind: 'visual-stamp';
 }
 
 /**
@@ -175,7 +176,7 @@ function parseHexColor(hex: string): { r: number; g: number; b: number } {
  *
  * @example
  * ```typescript
- * const result = await createSignatureField({
+ * const result = await createSignaturePlaceholder({
  *   document: pdfArrayBuffer,
  *   pageNumber: 1,
  *   rect: { x: 100, y: 100, width: 200, height: 50 },
@@ -183,7 +184,7 @@ function parseHexColor(hex: string): { r: number; g: number; b: number } {
  * });
  * ```
  */
-export async function createSignatureField(
+export async function createSignaturePlaceholder(
   options: CreateFieldOptions
 ): Promise<ProcessingResult> {
   const {
@@ -546,22 +547,20 @@ async function drawImageSignature(
 }
 
 /**
- * Verify signatures in a PDF document
- *
- * Note: This performs basic verification by checking signature metadata.
- * For cryptographic verification, a more specialized library would be needed.
+ * Inspect PDFLover visual signature metadata without claiming cryptographic
+ * verification.
  *
  * @param document - PDF document or ArrayBuffer
  * @returns Verification result
  */
-export async function verifySignature(
+export async function inspectVisualSignatures(
   document: PDFDocumentType | ArrayBuffer
 ): Promise<VerificationResult> {
   try {
     const bytes = getPDFBytes(document as ArrayBuffer | PDFDocumentType);
     const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
 
-    const signatures = await getSignatures(document);
+    const signatures = await getVisualSignatures(document);
 
     if (signatures.length === 0) {
       return {
@@ -571,14 +570,9 @@ export async function verifySignature(
       };
     }
 
-    // Basic verification - check that signature metadata exists
-    const allValid = signatures.every((sig) => sig.isValid);
-
     return {
-      verified: allValid,
-      message: allValid
-        ? `Document has ${signatures.length} valid signature(s)`
-        : 'Some signatures could not be verified',
+      verified: false,
+      message: `Found ${signatures.length} PDFLover visual signature stamp(s); no certificate was verified`,
       signatures,
     };
   } catch {
@@ -591,12 +585,12 @@ export async function verifySignature(
 }
 
 /**
- * Get all signatures from a PDF document
+ * Get PDFLover visual signature stamps from a PDF document.
  *
  * @param document - PDF document or ArrayBuffer
  * @returns Array of signature information
  */
-export async function getSignatures(
+export async function getVisualSignatures(
   document: PDFDocumentType | ArrayBuffer
 ): Promise<SignatureInfo[]> {
   try {
@@ -619,7 +613,7 @@ export async function getSignatures(
             reason: sigData.reason,
             location: sigData.location,
             pageNumber: sigData.pageNumber ?? 1,
-            isValid: true, // Basic validity - metadata exists
+            kind: 'visual-stamp',
           });
         } catch {
           // Skip invalid signature data
@@ -639,7 +633,7 @@ export async function getSignatures(
  * @param document - PDF document or ArrayBuffer
  * @returns Array of signature field information
  */
-export async function getSignatureFields(
+export async function getSignaturePlaceholders(
   document: PDFDocumentType | ArrayBuffer
 ): Promise<SignatureField[]> {
   try {
@@ -676,14 +670,14 @@ export async function getSignatureFields(
 }
 
 /**
- * Check if a PDF document has any signatures
+ * Check if a PDF contains PDFLover visual signature stamps.
  *
  * @param document - PDF document or ArrayBuffer
  * @returns True if the document has signatures
  */
-export async function hasSignatures(
+export async function hasVisualSignatures(
   document: PDFDocumentType | ArrayBuffer
 ): Promise<boolean> {
-  const signatures = await getSignatures(document);
+  const signatures = await getVisualSignatures(document);
   return signatures.length > 0;
 }

@@ -2,7 +2,8 @@
  * PDF merge functionality for @pdflover/pdf-core
  */
 
-import { PDFDocument } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFHexString, PDFName, type PDFRef } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
 import type {
   MergeOptions,
   ProcessingResult,
@@ -19,6 +20,73 @@ import {
   measureTime,
   getPDFBytes,
 } from './utils.js';
+
+interface PreservedBookmark {
+  title: string;
+  pageIndex: number;
+}
+
+async function extractBookmarks(
+  documents: MergeOptions['documents'],
+  loadedDocs: PDFDocument[],
+): Promise<PreservedBookmark[]> {
+  const bookmarks: PreservedBookmark[] = [];
+  let pageOffset = 0;
+  for (let documentIndex = 0; documentIndex < documents.length; documentIndex++) {
+    const bytes = getPDFBytes(documents[documentIndex]!).slice();
+    const rendered = await pdfjsLib.getDocument({ data: bytes }).promise;
+    try {
+      const outline = await rendered.getOutline();
+      const visit = async (items: NonNullable<typeof outline>): Promise<void> => {
+        for (const item of items) {
+          const destination = typeof item.dest === 'string'
+            ? await rendered.getDestination(item.dest)
+            : item.dest;
+          const reference = destination?.[0];
+          if (reference !== undefined && reference !== null) {
+            const localIndex = typeof reference === 'number'
+              ? reference
+              : await rendered.getPageIndex(reference);
+            if (localIndex >= 0 && localIndex < rendered.numPages && item.title.trim()) {
+              bookmarks.push({ title: item.title.trim(), pageIndex: pageOffset + localIndex });
+            }
+          }
+          if (item.items.length > 0) await visit(item.items);
+        }
+      };
+      if (outline) await visit(outline);
+    } finally {
+      await rendered.destroy();
+    }
+    pageOffset += loadedDocs[documentIndex]!.getPageCount();
+  }
+  return bookmarks;
+}
+
+function addBookmarks(document: PDFDocument, bookmarks: PreservedBookmark[]): void {
+  if (bookmarks.length === 0) return;
+  const outline = document.context.obj({ Type: 'Outlines', Count: bookmarks.length }) as PDFDict;
+  const outlineRef = document.context.register(outline);
+  const itemRefs: PDFRef[] = [];
+  const itemDicts: PDFDict[] = [];
+  for (const bookmark of bookmarks) {
+    const page = document.getPage(bookmark.pageIndex);
+    const item = document.context.obj({
+      Parent: outlineRef,
+      Dest: [page.ref, PDFName.of('Fit')],
+    }) as PDFDict;
+    item.set(PDFName.of('Title'), PDFHexString.fromText(bookmark.title));
+    itemDicts.push(item);
+    itemRefs.push(document.context.register(item));
+  }
+  for (let index = 0; index < itemDicts.length; index++) {
+    if (itemRefs[index - 1]) itemDicts[index]!.set(PDFName.of('Prev'), itemRefs[index - 1]!);
+    if (itemRefs[index + 1]) itemDicts[index]!.set(PDFName.of('Next'), itemRefs[index + 1]!);
+  }
+  outline.set(PDFName.of('First'), itemRefs[0]!);
+  outline.set(PDFName.of('Last'), itemRefs.at(-1)!);
+  document.catalog.set(PDFName.of('Outlines'), outlineRef);
+}
 
 /**
  * Merge multiple PDF documents into a single document
@@ -58,13 +126,6 @@ export async function mergePDFs(options: MergeOptions): Promise<ProcessingResult
       );
     }
 
-    if (documents.length === 1) {
-      // Single document - just return it
-      const singleDoc = documents[0]!;
-      const bytes = getPDFBytes(singleDoc);
-      return createSuccessResult(bytes.buffer as ArrayBuffer, bytes.byteLength, bytes.byteLength, 0);
-    }
-
     if (documents.length > MERGE_MAX_DOCUMENTS) {
       return createErrorResult(
         'FILE_TOO_LARGE',
@@ -90,6 +151,11 @@ export async function mergePDFs(options: MergeOptions): Promise<ProcessingResult
 
       totalOriginalSize += bytes.byteLength;
       reportProgress(0, ((i + 1) / documents.length) * 100);
+    }
+
+    if (documents.length === 1) {
+      const bytes = getPDFBytes(documents[0]!);
+      return createSuccessResult(bytes.buffer as ArrayBuffer, bytes.byteLength, bytes.byteLength, 0);
     }
 
     // Stage 1: Load all documents
@@ -147,11 +213,10 @@ export async function mergePDFs(options: MergeOptions): Promise<ProcessingResult
       mergedDoc.setModificationDate(new Date());
     }
 
-    // Copy bookmarks/outlines if requested
+    // Preserve source bookmark titles and destinations. Nested source outlines
+    // are flattened because pdf-lib does not expose an outline tree API.
     if (preserveBookmarks) {
-      // Note: pdf-lib has limited bookmark support
-      // For full bookmark merging, additional processing would be needed
-      // This is a placeholder for future enhancement
+      addBookmarks(mergedDoc, await extractBookmarks(documents, loadedDocs));
     }
 
     reportProgress(3, 50);

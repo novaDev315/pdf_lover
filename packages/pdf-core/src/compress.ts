@@ -252,6 +252,8 @@ export async function estimateCompression(
   const originalSize = bytes.byteLength;
 
   try {
+    const validation = validatePDFBuffer(bytes);
+    if (!validation.valid) throw new Error(validation.errorMessage);
     const sourceDoc = await loadPDFDocument(document as ArrayBuffer | PDFDocumentType);
     const pageCount = sourceDoc.getPageCount();
 

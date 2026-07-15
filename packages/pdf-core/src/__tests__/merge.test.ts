@@ -37,6 +37,18 @@ vi.mock('pdf-lib', () => {
   };
 });
 
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({
+    promise: Promise.resolve({
+      numPages: 2,
+      getOutline: vi.fn().mockResolvedValue(null),
+      getDestination: vi.fn(),
+      getPageIndex: vi.fn(),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    }),
+  })),
+}));
+
 // Create a valid PDF buffer for testing
 const createValidPdfBuffer = (size: number = 100): ArrayBuffer => {
   const buffer = new Uint8Array(size);
@@ -155,7 +167,7 @@ describe('mergePDFs', () => {
       expect(result.data).toBeDefined();
     });
 
-    it('should handle preserveBookmarks option', async () => {
+    it('should handle preserveBookmarks when sources have no outlines', async () => {
       const documents = [createValidPdfBuffer(100), createValidPdfBuffer(100)];
 
       const result = await mergePDFs({

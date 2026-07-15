@@ -1,6 +1,9 @@
 /**
- * PDF redaction operations for @pdflover/pdf-core
- * Provides secure redaction capabilities for sensitive content
+ * PDF visual masking helpers for @pdflover/pdf-core.
+ *
+ * These helpers draw opaque marks but do not remove underlying content streams.
+ * They must never be presented as secure redaction. Secure redaction belongs to
+ * the server operation that rasterizes or otherwise removes the source content.
  */
 
 import { PDFDocument, rgb } from 'pdf-lib';
@@ -117,8 +120,8 @@ export class RedactionManager {
 }
 
 /**
- * Redact a rectangular area in a PDF
- * This permanently removes content under the redaction
+ * Draw an opaque visual mask over a rectangular area in a PDF.
+ * Underlying text or graphics may remain extractable.
  *
  * @param pdfData - PDF data as ArrayBuffer or Uint8Array
  * @param pageNum - Page number (1-indexed)
@@ -199,7 +202,7 @@ export async function redactArea(
 }
 
 /**
- * Redact text occurrences in a PDF
+ * Draw opaque visual masks over text occurrences in a PDF.
  * Note: This requires text position information which pdf-lib doesn't provide directly
  * The rects parameter should contain the positions of found text instances
  *
@@ -280,7 +283,7 @@ export async function redactText(
 }
 
 /**
- * Apply multiple pending redactions to a PDF
+ * Apply multiple visual masks to a PDF.
  *
  * @param pdfData - PDF data as ArrayBuffer or Uint8Array
  * @param redactions - Array of redaction entries to apply
@@ -432,7 +435,7 @@ export async function sanitizePDF(
 
 /**
  * Create a redaction preview by adding semi-transparent overlays
- * This allows users to preview redactions before applying them permanently
+ * This allows users to preview areas before sending them to secure redaction.
  *
  * @param pdfData - PDF data as ArrayBuffer or Uint8Array
  * @param redactions - Array of redaction entries to preview

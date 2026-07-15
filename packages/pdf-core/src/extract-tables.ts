@@ -394,8 +394,8 @@ async function detectTableRegionsInPage(
   const minRows = options.minRows ?? 2;
   const minColumns = options.minColumns ?? 2;
 
-  // For now, treat the entire page as a potential table region
-  // A more sophisticated approach would detect multiple regions
+  // Analyze the page as one table candidate; rows and column boundaries below
+  // still have to meet the requested structural thresholds.
   if (rows.length < minRows) {
     return [];
   }

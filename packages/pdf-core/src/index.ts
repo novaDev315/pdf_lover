@@ -70,13 +70,9 @@ export type {
 
 // Security operations
 export {
-  encryptPDF,
-  decryptPDF,
-  setPermissions,
   getPermissions,
   isEncrypted,
   getSecurityInfo,
-  validatePassword,
 } from './security.js';
 
 export type {
@@ -102,12 +98,12 @@ export type {
 
 // Signature operations
 export {
-  createSignatureField,
+  createSignaturePlaceholder,
   signPDF,
-  verifySignature,
-  getSignatures,
-  getSignatureFields,
-  hasSignatures,
+  inspectVisualSignatures,
+  getVisualSignatures,
+  getSignaturePlaceholders,
+  hasVisualSignatures,
 } from './signature.js';
 
 export type {

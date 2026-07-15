@@ -4,6 +4,7 @@
  */
 
 import { PDFDocument, degrees } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
 import type {
   PDFDocument as PDFDocumentType,
   ProcessingResult,
@@ -521,10 +522,8 @@ export async function resizePages(options: ResizeOptions): Promise<ProcessingRes
 }
 
 /**
- * Auto-detect and trim white margins from pages
- *
- * Note: This is a simplified implementation that applies uniform margin trimming.
- * True whitespace detection would require rendering the page and analyzing pixels.
+ * Auto-detect and trim white margins from pages by rendering the selected
+ * pages and finding the bounding box of non-background pixels.
  *
  * @param options - Trim options
  * @returns ProcessingResult with trimmed PDF
@@ -568,41 +567,124 @@ export async function trimMargins(options: TrimOptions): Promise<ProcessingResul
     const pageCount = pdfDoc.getPageCount();
     reportProgress(1, 100);
 
-    // Stage 2: Analyze margins
+    // Stage 2: Render pages and analyze their pixel bounds.
     reportProgress(2, 0);
 
     const targetPages = pages ?? Array.from({ length: pageCount }, (_, i) => i + 1);
+    const validPages = targetPages.filter((page) => page >= 1 && page <= pageCount);
+    if (validPages.length === 0) {
+      return createErrorResult('PAGE_OUT_OF_RANGE', 'No valid pages were selected', 0);
+    }
+    if (typeof globalThis.document === 'undefined') {
+      return createErrorResult(
+        'UNKNOWN_ERROR',
+        'Automatic margin detection requires a browser canvas',
+        0,
+      );
+    }
 
-    // Since we can't easily detect whitespace without rendering,
-    // we apply a standard margin trim based on threshold percentage
-    // threshold 250 = 2% margin, threshold 245 = 5% margin, etc.
-    const trimPercent = Math.max(0, Math.min(10, (255 - threshold) / 10));
+    const renderedDocument = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+    const detectedBounds = new Map<number, CropBox>();
+    try {
+      for (let i = 0; i < validPages.length; i++) {
+        const pageNumber = validPages[i]!;
+        const renderedPage = await renderedDocument.getPage(pageNumber);
+        const viewport = renderedPage.getViewport({ scale: 1.5, rotation: 0 });
+        const canvas = globalThis.document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        if (!context) throw new Error('Canvas 2D rendering is unavailable');
+        await renderedPage.render({
+          canvasContext: context,
+          viewport,
+          background: 'rgb(255,255,255)',
+        }).promise;
+
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        let minX = canvas.width;
+        let minY = canvas.height;
+        let maxX = -1;
+        let maxY = -1;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const offset = (y * canvas.width + x) * 4;
+            const alpha = pixels[offset + 3]!;
+            const isContent = alpha > 8 && (
+              pixels[offset]! < threshold ||
+              pixels[offset + 1]! < threshold ||
+              pixels[offset + 2]! < threshold
+            );
+            if (!isContent) continue;
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x);
+            maxY = Math.max(maxY, y);
+          }
+        }
+
+        const sourcePage = pdfDoc.getPage(pageNumber - 1);
+        const { width, height } = sourcePage.getSize();
+        if (maxX < minX || maxY < minY) {
+          detectedBounds.set(pageNumber, { x: 0, y: 0, width, height });
+        } else {
+          const xScale = width / canvas.width;
+          const yScale = height / canvas.height;
+          const detectedLeft = minX * xScale;
+          const detectedRight = (canvas.width - maxX - 1) * xScale;
+          const detectedTop = minY * yScale;
+          const detectedBottom = (canvas.height - maxY - 1) * yScale;
+          const edgePadding = Math.max(0, padding);
+          const left = Math.max(0, detectedLeft - edgePadding);
+          const right = Math.max(left, Math.min(width, width - detectedRight + edgePadding));
+          const bottom = Math.max(0, detectedBottom - edgePadding);
+          const top = Math.max(bottom, Math.min(height, height - detectedTop + edgePadding));
+          detectedBounds.set(pageNumber, {
+            x: left,
+            y: bottom,
+            width: right - left,
+            height: top - bottom,
+          });
+        }
+        reportProgress(2, ((i + 1) / validPages.length) * 100, i + 1, validPages.length);
+      }
+    } finally {
+      await renderedDocument.destroy();
+    }
+
+    if (uniformPadding && detectedBounds.size > 1) {
+      const commonLeft = Math.min(...[...detectedBounds.values()].map((box) => box.x));
+      const commonBottom = Math.min(...[...detectedBounds.values()].map((box) => box.y));
+      const commonRightMargin = Math.min(...[...detectedBounds.entries()].map(([pageNumber, box]) => {
+        const { width } = pdfDoc.getPage(pageNumber - 1).getSize();
+        return width - box.x - box.width;
+      }));
+      const commonTopMargin = Math.min(...[...detectedBounds.entries()].map(([pageNumber, box]) => {
+        const { height } = pdfDoc.getPage(pageNumber - 1).getSize();
+        return height - box.y - box.height;
+      }));
+      for (const pageNumber of validPages) {
+        const { width, height } = pdfDoc.getPage(pageNumber - 1).getSize();
+        detectedBounds.set(pageNumber, {
+          x: commonLeft,
+          y: commonBottom,
+          width: width - commonLeft - commonRightMargin,
+          height: height - commonBottom - commonTopMargin,
+        });
+      }
+    }
 
     reportProgress(2, 100);
 
     // Stage 3: Trim pages
     reportProgress(3, 0);
 
-    for (let i = 0; i < targetPages.length; i++) {
-      const pageNum = targetPages[i]!;
-      if (pageNum < 1 || pageNum > pageCount) continue;
-
+    for (let i = 0; i < validPages.length; i++) {
+      const pageNum = validPages[i]!;
       const page = pdfDoc.getPage(pageNum - 1);
-      const { width, height } = page.getSize();
-
-      // Calculate trim amounts
-      const trimX = (trimPercent / 100) * width;
-      const trimY = (trimPercent / 100) * height;
-
-      // Apply crop box with padding
-      const cropX = Math.max(0, trimX - padding);
-      const cropY = Math.max(0, trimY - padding);
-      const cropWidth = width - 2 * trimX + 2 * padding;
-      const cropHeight = height - 2 * trimY + 2 * padding;
-
-      page.setCropBox(cropX, cropY, cropWidth, cropHeight);
-
-      reportProgress(3, ((i + 1) / targetPages.length) * 100, i + 1, targetPages.length);
+      const crop = detectedBounds.get(pageNum)!;
+      page.setCropBox(crop.x, crop.y, crop.width, crop.height);
+      reportProgress(3, ((i + 1) / validPages.length) * 100, i + 1, validPages.length);
     }
 
     // Stage 4: Save

@@ -3,6 +3,7 @@
  */
 
 import { PDFDocument } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
 import type {
   SplitOptions,
   ProcessingResult,
@@ -59,6 +60,7 @@ export async function splitPDF(options: SplitOptions): Promise<ProcessingResult>
     mode,
     ranges,
     pages,
+    maxSizeBytes,
     outputPrefix = 'split',
     onProgress,
   } = options;
@@ -140,21 +142,62 @@ export async function splitPDF(options: SplitOptions): Promise<ProcessingResult>
         break;
 
       case 'size':
-        // Split by file size - not fully implemented in browser context
-        // Would require iterative save and size check
-        // For now, fall back to splitting in half
-        const midPoint = Math.ceil(pageCount / 2);
-        splitRanges.push({ start: 1, end: midPoint });
-        if (midPoint < pageCount) {
-          splitRanges.push({ start: midPoint + 1, end: pageCount });
+        if (!maxSizeBytes || !Number.isSafeInteger(maxSizeBytes) || maxSizeBytes < 1_024) {
+          return createErrorResult(
+            'INVALID_PDF',
+            'maxSizeBytes must be an integer of at least 1024 for size splitting',
+            0,
+          );
         }
+        let rangeStart = 1;
+        for (let rangeEnd = 1; rangeEnd <= pageCount; rangeEnd++) {
+          const trial = await PDFDocument.create();
+          const indices = Array.from(
+            { length: rangeEnd - rangeStart + 1 },
+            (_, index) => rangeStart - 1 + index,
+          );
+          const trialPages = await trial.copyPages(sourceDoc, indices);
+          trialPages.forEach((page) => trial.addPage(page));
+          const trialSize = (await trial.save()).byteLength;
+          if (trialSize > maxSizeBytes && rangeEnd > rangeStart) {
+            splitRanges.push({ start: rangeStart, end: rangeEnd - 1 });
+            rangeStart = rangeEnd;
+          }
+        }
+        splitRanges.push({ start: rangeStart, end: pageCount });
         break;
 
       case 'bookmark':
-        // Split by bookmarks - requires outline parsing
-        // pdf-lib has limited bookmark support
-        // For now, treat as single split (whole document)
-        splitRanges.push({ start: 1, end: pageCount });
+        {
+          const renderedDocument = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+          try {
+            const outline = await renderedDocument.getOutline();
+            if (!outline?.length) {
+              return createErrorResult('INVALID_PDF', 'Document has no top-level bookmarks', 0);
+            }
+            const starts = new Set<number>([1]);
+            for (const item of outline) {
+              const destination = typeof item.dest === 'string'
+                ? await renderedDocument.getDestination(item.dest)
+                : item.dest;
+              const reference = destination?.[0];
+              if (!reference) continue;
+              const index = typeof reference === 'number'
+                ? reference
+                : await renderedDocument.getPageIndex(reference);
+              if (index >= 0 && index < pageCount) starts.add(index + 1);
+            }
+            const ordered = [...starts].sort((a, b) => a - b);
+            for (let index = 0; index < ordered.length; index++) {
+              splitRanges.push({
+                start: ordered[index]!,
+                end: (ordered[index + 1] ?? pageCount + 1) - 1,
+              });
+            }
+          } finally {
+            await renderedDocument.destroy();
+          }
+        }
         break;
 
       default:

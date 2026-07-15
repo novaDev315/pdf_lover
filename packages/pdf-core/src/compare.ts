@@ -8,6 +8,8 @@
  */
 
 import { PDFDocument } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
+import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import type {
   PDFDocument as PDFDocumentType,
   ProgressCallback,
@@ -218,24 +220,64 @@ export interface TextComparisonResult {
  * Extract text content from a PDF for comparison
  */
 async function extractTextFromPDF(
-  doc: PDFDocument
+  input: ArrayBuffer | PDFDocumentType
 ): Promise<TextLine[]> {
   const textLines: TextLine[] = [];
-  const pageCount = doc.getPageCount();
+  const bytes = getPDFBytes(input).slice();
+  const document = await pdfjsLib.getDocument({ data: bytes }).promise;
 
-  for (let i = 0; i < pageCount; i++) {
-    const page = doc.getPage(i);
-    const { width, height } = page.getSize();
+  try {
+    for (let pageIndex = 0; pageIndex < document.numPages; pageIndex++) {
+      const page = await document.getPage(pageIndex + 1);
+      const content = await page.getTextContent();
+      const items = content.items
+        .filter((item): item is TextItem => 'str' in item && item.str.trim().length > 0)
+        .map((item) => ({
+          text: item.str.trim(),
+          x: item.transform[4],
+          y: item.transform[5],
+          width: item.width,
+          height: Math.max(item.height, Math.abs(item.transform[3])),
+          hasEOL: item.hasEOL,
+        }))
+        .sort((a, b) => Math.abs(a.y - b.y) > 3 ? b.y - a.y : a.x - b.x);
 
-    // Since pdf-lib doesn't extract text directly, we create placeholder text
-    // In a real implementation, this would use PDF.js for text extraction
-    // For now, we'll use a simplified approach
-    textLines.push({
-      text: `[Page ${i + 1} content]`,
-      pageNumber: i + 1,
-      lineNumber: 1,
-      bounds: { x: 0, y: 0, width, height },
-    });
+      const lines: Array<{
+        parts: typeof items;
+        y: number;
+      }> = [];
+      for (const item of items) {
+        const current = lines[lines.length - 1];
+        if (!current || Math.abs(current.y - item.y) > 3 || current.parts.at(-1)?.hasEOL) {
+          lines.push({ parts: [item], y: item.y });
+        } else {
+          current.parts.push(item);
+        }
+      }
+
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        const line = lines[lineIndex]!;
+        const minX = Math.min(...line.parts.map((item) => item.x));
+        const minY = Math.min(...line.parts.map((item) => item.y));
+        const maxX = Math.max(...line.parts.map((item) => item.x + item.width));
+        const maxY = Math.max(...line.parts.map((item) => item.y + item.height));
+        let previousEnd = minX;
+        const text = line.parts.map((item) => {
+          const gap = item.x - previousEnd;
+          previousEnd = item.x + item.width;
+          return `${gap > Math.max(2, item.height * 0.2) ? ' ' : ''}${item.text}`;
+        }).join('').trim();
+        if (!text) continue;
+        textLines.push({
+          text,
+          pageNumber: pageIndex + 1,
+          lineNumber: lineIndex + 1,
+          bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        });
+      }
+    }
+  } finally {
+    await document.destroy();
   }
 
   return textLines;
@@ -372,18 +414,20 @@ export async function compareText(
   const stages = ['Loading PDFs', 'Extracting text', 'Computing diff'];
   const reportProgress = createProgressReporter(onProgress, stages);
 
-  // Stage 0: Load PDFs
+  // Stage 0: Validate PDFs
   reportProgress(0, 0);
-  const doc1 = await loadPDFDocument(pdf1 as ArrayBuffer);
+  const validation1 = validatePDFBuffer(getPDFBytes(pdf1));
+  if (!validation1.valid) throw new Error(validation1.errorMessage ?? 'First PDF is invalid');
   reportProgress(0, 50);
-  const doc2 = await loadPDFDocument(pdf2 as ArrayBuffer);
+  const validation2 = validatePDFBuffer(getPDFBytes(pdf2));
+  if (!validation2.valid) throw new Error(validation2.errorMessage ?? 'Second PDF is invalid');
   reportProgress(0, 100);
 
   // Stage 1: Extract text
   reportProgress(1, 0);
-  const text1 = await extractTextFromPDF(doc1);
+  const text1 = await extractTextFromPDF(pdf1);
   reportProgress(1, 50);
-  const text2 = await extractTextFromPDF(doc2);
+  const text2 = await extractTextFromPDF(pdf2);
   reportProgress(1, 100);
 
   // Stage 2: Compute diff
@@ -430,6 +474,39 @@ export async function compareText(
   };
 }
 
+async function renderPage(
+  document: PDFDocumentProxy,
+  pageNumber: number,
+  scale: number,
+): Promise<HTMLCanvasElement> {
+  const page = await document.getPage(pageNumber);
+  const viewport = page.getViewport({ scale });
+  const canvas = globalThis.document.createElement('canvas');
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const context = canvas.getContext('2d', { willReadFrequently: true });
+  if (!context) throw new Error('Canvas 2D rendering is unavailable');
+  await page.render({
+    canvasContext: context,
+    viewport,
+    background: 'rgb(255,255,255)',
+  }).promise;
+  return canvas;
+}
+
+function parseHexColor(value: string): [number, number, number] {
+  const normalized = value.trim().replace(/^#/, '');
+  const expanded = normalized.length === 3
+    ? normalized.split('').map((part) => `${part}${part}`).join('')
+    : normalized;
+  if (!/^[0-9a-f]{6}$/i.test(expanded)) return [255, 0, 0];
+  return [
+    Number.parseInt(expanded.slice(0, 2), 16),
+    Number.parseInt(expanded.slice(2, 4), 16),
+    Number.parseInt(expanded.slice(4, 6), 16),
+  ];
+}
+
 /**
  * Perform pixel-level visual comparison of two PDFs
  *
@@ -444,9 +521,9 @@ export async function compareVisual(
   options: VisualCompareOptions = {}
 ): Promise<VisualPageDiff[]> {
   const {
-    threshold: _threshold = 0.1,
-    highlightColor: _highlightColor = '#ff0000',
-    opacity: _opacity = 0.5,
+    threshold = 0.1,
+    highlightColor = '#ff0000',
+    opacity = 0.5,
     scale = 1.5,
     onProgress,
   } = options;
@@ -454,66 +531,95 @@ export async function compareVisual(
   const stages = ['Loading PDFs', 'Rendering pages', 'Comparing pixels'];
   const reportProgress = createProgressReporter(onProgress, stages);
 
-  // Stage 0: Load PDFs
-  reportProgress(0, 0);
-  const doc1 = await loadPDFDocument(pdf1 as ArrayBuffer);
-  reportProgress(0, 50);
-  const doc2 = await loadPDFDocument(pdf2 as ArrayBuffer);
-  reportProgress(0, 100);
-
-  const pageCount1 = doc1.getPageCount();
-  const pageCount2 = doc2.getPageCount();
-  const maxPages = Math.max(pageCount1, pageCount2);
-
-  const results: VisualPageDiff[] = [];
-
-  // For each page, create a placeholder diff result
-  // In a real implementation, this would render pages to canvas and compare pixels
-  for (let i = 0; i < maxPages; i++) {
-    reportProgress(1, (i / maxPages) * 100);
-
-    const pageNum = i + 1;
-    const hasPage1 = i < pageCount1;
-    const hasPage2 = i < pageCount2;
-
-    if (!hasPage1 || !hasPage2) {
-      // Page only exists in one PDF
-      results.push({
-        pageNum,
-        diffImageDataUrl: '',
-        similarity: 0,
-        differentPixels: 1000000,
-        totalPixels: 1000000,
-      });
-      continue;
-    }
-
-    // Get page dimensions
-    const page1 = doc1.getPage(i);
-    const page2 = doc2.getPage(i);
-    const size1 = page1.getSize();
-    const size2 = page2.getSize();
-
-    // Check if dimensions match
-    const sameDimensions =
-      Math.abs(size1.width - size2.width) < 1 &&
-      Math.abs(size1.height - size2.height) < 1;
-
-    // Calculate similarity (placeholder - real implementation would compare rendered pixels)
-    const similarity = sameDimensions ? 95 : 50;
-
-    results.push({
-      pageNum,
-      diffImageDataUrl: '', // Would be generated by canvas comparison
-      similarity,
-      differentPixels: sameDimensions ? 500 : 50000,
-      totalPixels: Math.round(size1.width * size1.height * scale * scale),
-    });
+  if (typeof globalThis.document === 'undefined') {
+    throw new Error('Visual PDF comparison requires a browser canvas');
   }
 
-  reportProgress(2, 100);
+  // Stage 0: Load PDFs with PDF.js so page contents can be rendered.
+  reportProgress(0, 0);
+  const doc1 = await pdfjsLib.getDocument({ data: getPDFBytes(pdf1).slice() }).promise;
+  reportProgress(0, 50);
+  const doc2 = await pdfjsLib.getDocument({ data: getPDFBytes(pdf2).slice() }).promise;
+  reportProgress(0, 100);
 
-  return results;
+  const pageCount1 = doc1.numPages;
+  const pageCount2 = doc2.numPages;
+  const maxPages = Math.max(pageCount1, pageCount2);
+  const results: VisualPageDiff[] = [];
+  const [highlightRed, highlightGreen, highlightBlue] = parseHexColor(highlightColor);
+  const normalizedThreshold = Math.max(0, Math.min(1, threshold));
+  const normalizedOpacity = Math.max(0, Math.min(1, opacity));
+
+  try {
+    for (let i = 0; i < maxPages; i++) {
+      const pageNum = i + 1;
+      reportProgress(1, (i / Math.max(1, maxPages)) * 100, pageNum, maxPages);
+      const canvas1 = pageNum <= pageCount1 ? await renderPage(doc1, pageNum, scale) : undefined;
+      const canvas2 = pageNum <= pageCount2 ? await renderPage(doc2, pageNum, scale) : undefined;
+      const width = Math.max(canvas1?.width ?? 0, canvas2?.width ?? 0);
+      const height = Math.max(canvas1?.height ?? 0, canvas2?.height ?? 0);
+      const totalPixels = width * height;
+      if (totalPixels === 0) continue;
+
+      const pixels1 = canvas1?.getContext('2d')?.getImageData(0, 0, canvas1.width, canvas1.height).data;
+      const pixels2 = canvas2?.getContext('2d')?.getImageData(0, 0, canvas2.width, canvas2.height).data;
+      const diffCanvas = globalThis.document.createElement('canvas');
+      diffCanvas.width = width;
+      diffCanvas.height = height;
+      const diffContext = diffCanvas.getContext('2d');
+      if (!diffContext) throw new Error('Canvas 2D rendering is unavailable');
+      const output = diffContext.createImageData(width, height);
+      let differentPixels = 0;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const outputOffset = (y * width + x) * 4;
+          const inside1 = Boolean(canvas1 && x < canvas1.width && y < canvas1.height && pixels1);
+          const inside2 = Boolean(canvas2 && x < canvas2.width && y < canvas2.height && pixels2);
+          const offset1 = canvas1 ? (y * canvas1.width + x) * 4 : 0;
+          const offset2 = canvas2 ? (y * canvas2.width + x) * 4 : 0;
+          const red1 = inside1 ? pixels1![offset1]! : 255;
+          const green1 = inside1 ? pixels1![offset1 + 1]! : 255;
+          const blue1 = inside1 ? pixels1![offset1 + 2]! : 255;
+          const red2 = inside2 ? pixels2![offset2]! : 255;
+          const green2 = inside2 ? pixels2![offset2 + 1]! : 255;
+          const blue2 = inside2 ? pixels2![offset2 + 2]! : 255;
+          const delta = Math.max(
+            Math.abs(red1 - red2),
+            Math.abs(green1 - green2),
+            Math.abs(blue1 - blue2),
+          ) / 255;
+          const different = inside1 !== inside2 || delta > normalizedThreshold;
+          if (different) {
+            differentPixels++;
+            output.data[outputOffset] = highlightRed;
+            output.data[outputOffset + 1] = highlightGreen;
+            output.data[outputOffset + 2] = highlightBlue;
+            output.data[outputOffset + 3] = Math.round(normalizedOpacity * 255);
+          } else {
+            const gray = Math.round((red2 + green2 + blue2) / 3);
+            output.data[outputOffset] = gray;
+            output.data[outputOffset + 1] = gray;
+            output.data[outputOffset + 2] = gray;
+            output.data[outputOffset + 3] = 55;
+          }
+        }
+      }
+
+      diffContext.putImageData(output, 0, 0);
+      results.push({
+        pageNum,
+        diffImageDataUrl: diffCanvas.toDataURL('image/png'),
+        similarity: Math.round((1 - differentPixels / totalPixels) * 10000) / 100,
+        differentPixels,
+        totalPixels,
+      });
+      reportProgress(2, ((i + 1) / maxPages) * 100, pageNum, maxPages);
+    }
+    return results;
+  } finally {
+    await Promise.all([doc1.destroy(), doc2.destroy()]);
+  }
 }
 
 /**
@@ -669,8 +775,35 @@ export async function comparePDFs(
       }
     }
 
+    const pageTextDiffs = textResult?.lineDiffs.filter((diff) => diff.pageNumber === pageNum) ?? [];
+    const pageUnchanged = pageTextDiffs.filter((diff) => diff.type === 'unchanged').length;
+    const pageTextSimilarity = pageTextDiffs.length > 0
+      ? Math.round((pageUnchanged / pageTextDiffs.length) * 100)
+      : 100;
+    for (const diff of pageTextDiffs) {
+      if (diff.type === 'unchanged') continue;
+      differences.push({
+        type:
+          diff.type === 'added'
+            ? 'addition'
+            : diff.type === 'removed'
+              ? 'deletion'
+              : 'modification',
+        pageNumber: pageNum,
+        location: { x: 0, y: 0, width: 0, height: 0 },
+        oldValue: diff.originalText ?? null,
+        newValue: diff.modifiedText ?? null,
+        description:
+          diff.type === 'added'
+            ? 'Text line added'
+            : diff.type === 'removed'
+              ? 'Text line removed'
+              : 'Text line changed',
+      });
+    }
+
     // Calculate similarities
-    const textSimilarity = textResult?.similarity ?? 100;
+    const textSimilarity = textResult ? pageTextSimilarity : 100;
     const visualSim = visualResults?.[i]?.similarity;
     const similarity = visualSim !== undefined
       ? Math.round((textSimilarity + visualSim) / 2)
@@ -869,13 +1002,40 @@ export async function comparePages(
     });
   }
 
-  const similarity = sameDimensions ? 90 : 50;
+  const lines1 = (await extractTextFromPDF(pdf1)).filter((line) => line.pageNumber === pageNum1);
+  const lines2 = (await extractTextFromPDF(pdf2))
+    .filter((line) => line.pageNumber === pageNum2)
+    .map((line) => ({ ...line, pageNumber: pageNum1 }));
+  const textDiffs = computeLineDiff(lines1, lines2);
+  const unchanged = textDiffs.filter((diff) => diff.type === 'unchanged').length;
+  const textSimilarity = textDiffs.length > 0
+    ? Math.round((unchanged / textDiffs.length) * 100)
+    : 100;
+
+  for (const diff of textDiffs) {
+    if (diff.type === 'unchanged') continue;
+    differences.push({
+      type:
+        diff.type === 'added'
+          ? 'addition'
+          : diff.type === 'removed'
+            ? 'deletion'
+            : 'modification',
+      pageNumber: pageNum1,
+      location: { x: 0, y: 0, width: size1.width, height: size1.height },
+      oldValue: diff.originalText ?? null,
+      newValue: diff.modifiedText ?? null,
+      description: `Text ${diff.type}`,
+    });
+  }
+
+  const similarity = sameDimensions ? textSimilarity : Math.round(textSimilarity * 0.5);
 
   return {
     pageNum: pageNum1,
     differences,
     similarity,
-    textSimilarity: similarity,
+    textSimilarity,
     sameDimensions,
   };
 }

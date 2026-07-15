@@ -15,7 +15,15 @@ import {
   PDFDict,
   PDFArray,
   PDFString,
+  PDFCheckBox,
+  PDFDropdown,
+  PDFOptionList,
+  PDFRadioGroup,
+  PDFSignature,
+  PDFTextField,
 } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
+import type { PDFDocumentProxy, TextItem as PDFJSTextItem } from 'pdfjs-dist/types/src/display/api';
 import type {
   ProcessingResult,
   ProgressCallback,
@@ -306,7 +314,7 @@ export function suggestFieldTypes(text: string): { type: FormFieldType; confiden
       if (pattern.test(normalizedText)) {
         return {
           type: fieldType as FormFieldType,
-          confidence: 90 + Math.random() * 10, // 90-100
+          confidence: 95,
         };
       }
     }
@@ -472,19 +480,42 @@ interface TextItem {
 }
 
 /**
- * Extract text content with positions from a PDF page (simplified)
- * In a real implementation, this would use PDF.js for accurate text extraction
+ * Extract text content with positions from a PDF page.
  */
 async function extractTextContent(
-  pdfDoc: PDFDocument,
+  pdfDoc: PDFDocumentProxy,
   pageIndex: number
 ): Promise<TextItem[]> {
-  const page = pdfDoc.getPage(pageIndex);
-  const { width, height } = page.getSize();
+  const page = await pdfDoc.getPage(pageIndex + 1);
+  const content = await page.getTextContent();
+  return content.items
+    .filter((item): item is PDFJSTextItem => 'str' in item)
+    .map((item) => ({
+      str: item.str,
+      x: item.transform[4],
+      y: item.transform[5],
+      width: item.width,
+      height: Math.max(item.height, Math.abs(item.transform[3])),
+    }));
+}
 
-  // For now, return empty - in production, would integrate with PDF.js
-  // or another text extraction library for accurate positioning
-  return [];
+function fieldTypeAllowed(type: FormFieldType, options: FormDetectionOptions): boolean {
+  if ((type === 'text' || type === 'email' || type === 'phone' || type === 'number' || type === 'textarea') && options.detectText === false) return false;
+  if (type === 'checkbox' && options.detectCheckboxes === false) return false;
+  if (type === 'radio' && options.detectRadio === false) return false;
+  if (type === 'dropdown' && options.detectDropdowns === false) return false;
+  if (type === 'signature' && options.detectSignatures === false) return false;
+  if (type === 'date' && options.detectDates === false) return false;
+  return true;
+}
+
+function existingFieldType(field: unknown): FormFieldType {
+  if (field instanceof PDFCheckBox) return 'checkbox';
+  if (field instanceof PDFRadioGroup) return 'radio';
+  if (field instanceof PDFDropdown || field instanceof PDFOptionList) return 'dropdown';
+  if (field instanceof PDFSignature) return 'signature';
+  if (field instanceof PDFTextField && field.isMultiline()) return 'textarea';
+  return 'text';
 }
 
 /**
@@ -544,143 +575,156 @@ export async function detectFormFields(
   const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const pageCount = pdfDoc.getPageCount();
   const pagesToAnalyze = targetPages ?? Array.from({ length: pageCount }, (_, i) => i + 1);
+  const selectedPages = new Set(pagesToAnalyze.filter((page) => page >= 1 && page <= pageCount));
+  const detectionOptions: FormDetectionOptions = {
+    detectText,
+    detectCheckboxes,
+    detectRadio,
+    detectDropdowns,
+    detectSignatures,
+    detectDates,
+  };
 
   reportProgress(0, 100);
   reportProgress(1, 0);
 
   const detectedFields: DetectedField[] = [];
+  const occupied: Array<{ page: number; bounds: FieldBounds }> = [];
+  const pages = pdfDoc.getPages();
 
-  for (let i = 0; i < pagesToAnalyze.length; i++) {
-    const pageNum = pagesToAnalyze[i]!;
-    if (pageNum < 1 || pageNum > pageCount) continue;
-
-    const page = pdfDoc.getPage(pageNum - 1);
-    const { width, height } = page.getSize();
-
-    reportProgress(1, ((i + 1) / pagesToAnalyze.length) * 100, i + 1, pagesToAnalyze.length);
-
-    // Analyze page for form field patterns
-    // In a production implementation, this would extract actual text content
-    // and perform sophisticated pattern matching
-
-    // For demonstration, we'll create some heuristic-based detection
-    // based on common form layouts
-
-    // Detect signature fields by looking for common patterns
-    if (detectSignatures) {
-      // Common signature field at bottom of page
-      const signatureField: DetectedField = {
-        id: generateFieldId(),
-        type: 'signature',
-        label: 'Signature',
-        bounds: {
-          x: width * 0.1,
-          y: height * 0.1,
-          width: width * 0.35,
-          height: 50,
-        },
-        page: pageNum,
-        confidence: 40 + sensitivity * 0.3,
-        name: 'signature',
-        required: true,
-        placeholder: 'Sign here',
-      };
-
-      if (signatureField.confidence >= minConfidence) {
-        detectedFields.push(signatureField);
-      }
-
-      // Date field often appears near signature
-      if (detectDates) {
-        const dateField: DetectedField = {
-          id: generateFieldId(),
-          type: 'date',
-          label: 'Date',
-          bounds: {
-            x: width * 0.55,
-            y: height * 0.1,
-            width: width * 0.25,
-            height: 30,
-          },
-          page: pageNum,
-          confidence: 35 + sensitivity * 0.3,
-          name: 'date',
-          required: true,
-          placeholder: 'MM/DD/YYYY',
-          validationPattern: '^\\d{2}/\\d{2}/\\d{4}$',
-        };
-
-        if (dateField.confidence >= minConfidence) {
-          detectedFields.push(dateField);
-        }
-      }
+  const addField = (field: DetectedField) => {
+    if (field.confidence < minConfidence || !fieldTypeAllowed(field.type, detectionOptions)) return;
+    const overlaps = occupied.some((entry) => {
+      if (entry.page !== field.page) return false;
+      const a = entry.bounds;
+      const b = field.bounds;
+      const overlapWidth = Math.max(0, Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x));
+      const overlapHeight = Math.max(0, Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y));
+      return overlapWidth * overlapHeight > Math.min(a.width * a.height, b.width * b.height) * 0.5;
+    });
+    if (!overlaps) {
+      detectedFields.push(field);
+      occupied.push({ page: field.page, bounds: field.bounds });
     }
+  };
 
-    // Detect potential text input areas
-    if (detectText) {
-      // Common header fields
-      const headerFields = [
-        { label: 'Name', y: height * 0.85, required: true },
-        { label: 'Address', y: height * 0.78, required: false },
-        { label: 'City', y: height * 0.71, required: false },
-        { label: 'Phone', y: height * 0.64, required: false },
-        { label: 'Email', y: height * 0.57, required: false },
+  // Existing AcroForm widgets are definitive, not heuristic detections.
+  for (const field of pdfDoc.getForm().getFields()) {
+    const type = existingFieldType(field);
+    const name = field.getName();
+    const label = name.split('.').at(-1)?.replace(/[_-]+/g, ' ') || name;
+    const widgets = field.acroField.getWidgets();
+    const options = field instanceof PDFDropdown || field instanceof PDFOptionList
+      ? field.getOptions()
+      : field instanceof PDFRadioGroup
+        ? field.getOptions()
+        : undefined;
+    for (let widgetIndex = 0; widgetIndex < widgets.length; widgetIndex++) {
+      const widget = widgets[widgetIndex]!;
+      const pageRef = widget.P();
+      const pageIndex = pages.findIndex((page) =>
+        pageRef !== undefined && page.ref.toString() === pageRef.toString()
+      );
+      const pageNumber = pageIndex >= 0 ? pageIndex + 1 : 1;
+      if (!selectedPages.has(pageNumber)) continue;
+      const rectangle = widget.getRectangle();
+      addField({
+        id: `${generateFieldName(name)}_${widgetIndex + 1}`,
+        type,
+        label,
+        bounds: {
+          x: rectangle.x,
+          y: rectangle.y,
+          width: rectangle.width,
+          height: rectangle.height,
+        },
+        page: pageNumber,
+        confidence: 100,
+        name,
+        required: field.isRequired(),
+        options,
+      });
+    }
+  }
+
+  const textDocument = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+  try {
+    for (let i = 0; i < pagesToAnalyze.length; i++) {
+      const pageNum = pagesToAnalyze[i]!;
+      if (!selectedPages.has(pageNum)) continue;
+      const page = pdfDoc.getPage(pageNum - 1);
+      const { width } = page.getSize();
+      const textContent = await extractTextContent(textDocument, pageNum - 1);
+      const candidates: Array<{ bounds: FieldBounds; type?: FormFieldType }> = [
+        ...detectUnderlines(textContent, width, page.getHeight()).map((bounds) => ({ bounds })),
+        ...detectBoxes(textContent, width, page.getHeight()).map((box) => ({
+          bounds: box.bounds,
+          type: box.type,
+        })),
       ];
 
-      for (const hf of headerFields) {
-        const suggestion = suggestFieldTypes(hf.label);
-        const field: DetectedField = {
+      for (const candidate of candidates) {
+        const nearby = findNearbyLabels(textContent, candidate.bounds, pageNum);
+        const rawLabel = nearby[0]?.text.replace(/[:*\s]+$/, '').trim();
+        const label = rawLabel || 'Unlabeled field';
+        const suggestion = candidate.type
+          ? { type: candidate.type, confidence: 90 }
+          : suggestFieldTypes(label);
+        const confidence = Math.min(
+          98,
+          58 + (rawLabel ? 22 : 0) + (suggestion.confidence - 50) * 0.2 + (sensitivity - 50) * 0.2,
+        );
+        addField({
           id: generateFieldId(),
           type: suggestion.type,
-          label: hf.label,
+          label,
+          bounds: candidate.bounds,
+          page: pageNum,
+          confidence,
+          name: generateFieldName(rawLabel || `${suggestion.type}_${pageNum}_${candidate.bounds.x}`),
+          required: rawLabel ? isRequiredField(nearby[0]!.text) : false,
+          placeholder: rawLabel ? `Enter ${rawLabel.toLowerCase()}` : undefined,
+          validationPattern:
+            suggestion.type === 'email'
+              ? '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
+              : suggestion.type === 'phone'
+                ? '^[\\d\\s\\-\\(\\)\\+]+$'
+                : undefined,
+        });
+      }
+
+      // A recognized label followed by available horizontal space is also a
+      // candidate even when the PDF does not encode an underline glyph.
+      for (const item of textContent) {
+        const label = item.str.replace(/[:*\s]+$/, '').trim();
+        if (!/[:*]\s*$/.test(item.str) || label.length < 2) continue;
+        const suggestion = suggestFieldTypes(label);
+        if (suggestion.confidence <= 50) continue;
+        const x = item.x + item.width + 8;
+        const availableWidth = width - x - 20;
+        if (availableWidth < 72) continue;
+        addField({
+          id: generateFieldId(),
+          type: suggestion.type,
+          label,
           bounds: {
-            x: width * 0.25,
-            y: hf.y,
-            width: width * 0.5,
-            height: 25,
+            x,
+            y: item.y - 4,
+            width: Math.min(240, availableWidth),
+            height: Math.max(20, item.height + 8),
           },
           page: pageNum,
-          confidence: (suggestion.confidence * 0.5) + (sensitivity * 0.3),
-          name: generateFieldName(hf.label),
-          required: hf.required,
-          placeholder: `Enter ${hf.label.toLowerCase()}`,
-        };
-
-        // Add validation patterns for specific types
-        if (field.type === 'email') {
-          field.validationPattern = '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$';
-        } else if (field.type === 'phone') {
-          field.validationPattern = '^[\\d\\s\\-\\(\\)\\+]+$';
-        }
-
-        if (field.confidence >= minConfidence) {
-          detectedFields.push(field);
-        }
+          confidence: Math.min(92, 60 + (suggestion.confidence - 50) * 0.5 + (sensitivity - 50) * 0.1),
+          name: generateFieldName(label),
+          required: isRequiredField(item.str),
+          placeholder: `Enter ${label.toLowerCase()}`,
+        });
       }
-    }
 
-    // Detect checkboxes
-    if (detectCheckboxes) {
-      const checkboxField: DetectedField = {
-        id: generateFieldId(),
-        type: 'checkbox',
-        label: 'I agree to the terms and conditions',
-        bounds: {
-          x: width * 0.1,
-          y: height * 0.2,
-          width: 20,
-          height: 20,
-        },
-        page: pageNum,
-        confidence: 30 + sensitivity * 0.2,
-        name: 'agree_terms',
-        required: true,
-      };
-
-      if (checkboxField.confidence >= minConfidence) {
-        detectedFields.push(checkboxField);
-      }
+      reportProgress(1, ((i + 1) / pagesToAnalyze.length) * 100, i + 1, pagesToAnalyze.length);
     }
+  } finally {
+    await textDocument.destroy();
   }
 
   reportProgress(2, 100);
@@ -995,6 +1039,17 @@ export async function createFormFields(
     const bgColor = parseHexColor(backgroundColor);
     const bdColor = parseHexColor(borderColor);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const form = pdfDoc.getForm();
+    const usedNames = new Set(form.getFields().map((field) => field.getName()));
+
+    const uniqueName = (requested: string): string => {
+      const base = generateFieldName(requested);
+      let name = base;
+      let suffix = 2;
+      while (usedNames.has(name)) name = `${base}_${suffix++}`;
+      usedNames.add(name);
+      return name;
+    };
 
     // Create form fields
     for (let i = 0; i < fields.length; i++) {
@@ -1006,64 +1061,53 @@ export async function createFormFields(
 
       const page = pdfDoc.getPage(field.page - 1);
 
-      // Draw field background
-      page.drawRectangle({
+      const appearance = {
         x: field.bounds.x,
         y: field.bounds.y,
         width: field.bounds.width,
         height: field.bounds.height,
-        color: rgb(bgColor.r, bgColor.g, bgColor.b),
+        backgroundColor: rgb(bgColor.r, bgColor.g, bgColor.b),
         borderColor: rgb(bdColor.r, bdColor.g, bdColor.b),
         borderWidth: 1,
-        opacity: 0.9,
-      });
-
-      // Draw field label
-      const labelText = field.placeholder ?? field.label;
-      const labelFontSize = Math.min(fontSize, field.bounds.height * 0.6);
-      const textWidth = font.widthOfTextAtSize(labelText, labelFontSize);
-
-      if (textWidth < field.bounds.width - 10) {
-        page.drawText(labelText, {
-          x: field.bounds.x + 5,
-          y: field.bounds.y + (field.bounds.height - labelFontSize) / 2,
-          size: labelFontSize,
-          font,
-          color: rgb(0.5, 0.5, 0.5),
-        });
-      }
-
-      // For checkboxes, draw the checkbox indicator
-      if (field.type === 'checkbox') {
-        page.drawRectangle({
-          x: field.bounds.x + 2,
-          y: field.bounds.y + 2,
-          width: field.bounds.width - 4,
-          height: field.bounds.height - 4,
-          borderColor: rgb(bdColor.r, bdColor.g, bdColor.b),
-          borderWidth: 1.5,
-        });
-      }
-
-      // Store field metadata
-      const existingKeywords = pdfDoc.getKeywords() ?? '';
-      const fieldInfo = {
-        type: 'formField',
-        fieldType: field.type,
-        name: field.name,
-        label: field.label,
-        page: field.page,
-        bounds: field.bounds,
-        required: field.required,
+        textColor: rgb(0.1, 0.1, 0.1),
+        font,
       };
-      const newKeywords = existingKeywords
-        ? `${existingKeywords}|form:${JSON.stringify(fieldInfo)}`
-        : `form:${JSON.stringify(fieldInfo)}`;
-      pdfDoc.setKeywords([newKeywords]);
+      const name = uniqueName(field.name || field.label);
+
+      if (field.type === 'checkbox') {
+        const checkBox = form.createCheckBox(name);
+        if (field.required) checkBox.enableRequired();
+        checkBox.addToPage(page, appearance);
+      } else if (field.type === 'radio') {
+        const radio = form.createRadioGroup(name);
+        if (field.required) radio.enableRequired();
+        const options = field.options?.length ? field.options : [field.label];
+        const optionWidth = field.bounds.width / options.length;
+        options.forEach((option, optionIndex) => radio.addOptionToPage(option, page, {
+          ...appearance,
+          x: field.bounds.x + optionIndex * optionWidth,
+          width: Math.min(optionWidth, field.bounds.height),
+        }));
+      } else if (field.type === 'dropdown') {
+        const dropdown = form.createDropdown(name);
+        if (field.options?.length) dropdown.setOptions(field.options);
+        if (field.required) dropdown.enableRequired();
+        dropdown.addToPage(page, appearance);
+      } else {
+        const textField = form.createTextField(name);
+        if (field.type === 'textarea') textField.enableMultiline();
+        if (field.required) textField.enableRequired();
+        textField.addToPage(page, appearance);
+        // pdf-lib creates the default appearance entry when the widget is
+        // added to a page. Setting the font size before addToPage throws a
+        // MissingDAEntryError for every newly-created text field.
+        textField.setFontSize(Math.min(fontSize, Math.max(4, field.bounds.height * 0.6)));
+      }
 
       reportProgress(1, ((i + 1) / fields.length) * 100, i + 1, fields.length);
     }
 
+    form.updateFieldAppearances(font);
     reportProgress(2, 0);
 
     // Save document
@@ -1087,8 +1131,7 @@ export async function createFormFields(
 /**
  * Get form fields from a PDF document
  *
- * Extracts existing form field definitions from a PDF that was
- * previously processed with createFormFields.
+ * Extracts existing AcroForm field widgets from a PDF.
  *
  * @param document - PDF document as ArrayBuffer or Uint8Array
  * @returns Array of form field definitions
@@ -1099,29 +1142,41 @@ export async function getFormFields(
   const bytes = getPDFBytes(document);
   const pdfDoc = await PDFDocument.load(bytes, { ignoreEncryption: true });
 
-  const keywords = pdfDoc.getKeywords() ?? '';
   const fields: DetectedField[] = [];
-
-  const parts = keywords.split('|');
-  for (const part of parts) {
-    if (part.startsWith('form:')) {
-      try {
-        const fieldData = JSON.parse(part.slice('form:'.length));
-        if (fieldData.type === 'formField') {
-          fields.push({
-            id: generateFieldId(),
-            type: fieldData.fieldType,
-            label: fieldData.label,
-            bounds: fieldData.bounds,
-            page: fieldData.page,
-            confidence: 100,
-            name: fieldData.name,
-            required: fieldData.required ?? false,
-          });
-        }
-      } catch {
-        // Skip invalid field data
-      }
+  const pages = pdfDoc.getPages();
+  for (const field of pdfDoc.getForm().getFields()) {
+    const type = existingFieldType(field);
+    const name = field.getName();
+    const label = name.split('.').at(-1)?.replace(/[_-]+/g, ' ') || name;
+    const options = field instanceof PDFDropdown || field instanceof PDFOptionList
+      ? field.getOptions()
+      : field instanceof PDFRadioGroup
+        ? field.getOptions()
+        : undefined;
+    const widgets = field.acroField.getWidgets();
+    for (let widgetIndex = 0; widgetIndex < widgets.length; widgetIndex++) {
+      const widget = widgets[widgetIndex]!;
+      const rectangle = widget.getRectangle();
+      const pageRef = widget.P();
+      const pageIndex = pages.findIndex((page) =>
+        pageRef !== undefined && page.ref.toString() === pageRef.toString()
+      );
+      fields.push({
+        id: `${generateFieldName(name)}_${widgetIndex + 1}`,
+        type,
+        label,
+        bounds: {
+          x: rectangle.x,
+          y: rectangle.y,
+          width: rectangle.width,
+          height: rectangle.height,
+        },
+        page: pageIndex >= 0 ? pageIndex + 1 : 1,
+        confidence: 100,
+        name,
+        required: field.isRequired(),
+        options,
+      });
     }
   }
 

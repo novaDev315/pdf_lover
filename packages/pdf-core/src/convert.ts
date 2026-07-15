@@ -11,6 +11,8 @@
  */
 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import * as pdfjsLib from 'pdfjs-dist';
+import type { PDFDocumentProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import type {
   ConvertOptions,
   ConvertOutputFormat,
@@ -163,32 +165,31 @@ async function convertToText(
 ): Promise<ProcessingResult> {
   reportProgress(1, 0);
 
-  // PDF text extraction requires PDF.js
-  // This is a placeholder that returns structure info
-  // In the web app, PDF.js would be used for actual text extraction
-
   try {
-    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    const pageCount = doc.getPageCount();
+    const doc = await loadPdfJs(bytes);
+    const pageCount = doc.numPages;
 
     reportProgress(1, 100);
     reportProgress(2, 0);
 
     const targetPages = pages ?? Array.from({ length: pageCount }, (_, i) => i + 1);
 
-    // Placeholder text extraction
-    // In actual implementation, this would use PDF.js getTextContent()
     const textParts: string[] = [];
 
     for (let i = 0; i < targetPages.length; i++) {
       const pageNum = targetPages[i]!;
       if (pageNum < 1 || pageNum > pageCount) continue;
 
-      // This is a placeholder - actual text would come from PDF.js
-      textParts.push(`[Page ${pageNum}]`);
-      textParts.push('');
-      textParts.push('Note: Text extraction requires PDF.js in browser environment.');
-      textParts.push('Use the web application for full text extraction capability.');
+      const page = await doc.getPage(pageNum);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        .filter((item): item is TextItem => 'str' in item)
+        .map((item) => `${item.str}${item.hasEOL ? '\n' : ' '}`)
+        .join('')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+      textParts.push(`Page ${pageNum}`);
+      textParts.push(pageText);
       textParts.push('');
 
       reportProgress(2, ((i + 1) / targetPages.length) * 100, i + 1, targetPages.length);
@@ -230,9 +231,11 @@ async function convertToHTML(
   reportProgress(1, 0);
 
   try {
-    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    const pageCount = doc.getPageCount();
-    const title = doc.getTitle() ?? 'Converted PDF';
+    const doc = await loadPdfJs(bytes);
+    const pageCount = doc.numPages;
+    const metadata = await doc.getMetadata().catch(() => undefined);
+    const info = metadata?.info as { Title?: string } | undefined;
+    const title = info?.Title ?? 'Converted PDF';
 
     reportProgress(1, 100);
     reportProgress(2, 0);
@@ -264,10 +267,14 @@ async function convertToHTML(
 
       htmlParts.push(`  <div class="page">`);
       htmlParts.push(`    <div class="page-number">Page ${pageNum} of ${pageCount}</div>`);
-      htmlParts.push(`    <div class="note">`);
-      htmlParts.push(`      <p>Full HTML conversion with text and images requires PDF.js in browser environment.</p>`);
-      htmlParts.push(`      <p>Use the web application for complete conversion capability.</p>`);
-      htmlParts.push(`    </div>`);
+      const page = await doc.getPage(pageNum);
+      const content = await page.getTextContent();
+      const text = content.items
+        .filter((item): item is TextItem => 'str' in item)
+        .map((item) => `${item.str}${item.hasEOL ? '\n' : ' '}`)
+        .join('')
+        .trim();
+      htmlParts.push(`    <pre>${escapeHTML(text)}</pre>`);
       htmlParts.push(`  </div>`);
 
       reportProgress(2, ((i + 1) / targetPages.length) * 100, i + 1, targetPages.length);
@@ -304,8 +311,7 @@ async function convertToHTML(
 /**
  * Convert PDF to images
  *
- * Note: Actual image rendering requires PDF.js with canvas in browser.
- * This provides the structure; the web app implements full rendering.
+ * Requires a browser canvas implementation.
  */
 async function convertToImages(
   bytes: Uint8Array,
@@ -318,8 +324,8 @@ async function convertToImages(
   reportProgress(1, 0);
 
   try {
-    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    const pageCount = doc.getPageCount();
+    const doc = await loadPdfJs(bytes);
+    const pageCount = doc.numPages;
 
     reportProgress(1, 100);
     reportProgress(2, 0);
@@ -328,37 +334,27 @@ async function convertToImages(
     const dpi = customDpi ?? DPI_SETTINGS[quality];
     const jpegQuality = JPEG_QUALITY_SETTINGS[quality];
 
-    // In actual implementation, this would render pages using PDF.js
-    // Here we return placeholder info about what would be generated
-
     const files: Array<{ filename: string; data: ArrayBuffer; pageCount: number }> = [];
-    const mimeType = MIME_TYPES[format === 'jpg' ? 'jpeg' : format];
     const extension = format === 'jpg' ? 'jpg' : format;
 
     for (let i = 0; i < targetPages.length; i++) {
       const pageNum = targetPages[i]!;
       if (pageNum < 1 || pageNum > pageCount) continue;
 
-      const page = doc.getPage(pageNum - 1);
-      const { width, height } = page.getSize();
-
-      // Calculate pixel dimensions at given DPI
-      const pixelWidth = Math.round((width / 72) * dpi);
-      const pixelHeight = Math.round((height / 72) * dpi);
-
-      // Placeholder: Create a minimal placeholder image
-      // In real implementation, PDF.js would render to canvas
-      const placeholderData = createPlaceholderImageData(
-        format,
-        pixelWidth,
-        pixelHeight,
-        pageNum,
-        pageCount
-      );
+      const page = await doc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: dpi / 72 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Canvas 2D rendering is unavailable');
+      await page.render({ canvasContext: context, viewport }).promise;
+      const mimeType = MIME_TYPES[format === 'jpg' ? 'jpeg' : format];
+      const blob = await canvasBlob(canvas, mimeType, jpegQuality);
 
       files.push({
         filename: `page_${pageNum}.${extension}`,
-        data: placeholderData,
+        data: await blob.arrayBuffer(),
         pageCount: 1,
       });
 
@@ -392,8 +388,8 @@ async function convertToSVG(
   reportProgress(1, 0);
 
   try {
-    const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    const pageCount = doc.getPageCount();
+    const doc = await loadPdfJs(bytes);
+    const pageCount = doc.numPages;
 
     reportProgress(1, 100);
     reportProgress(2, 0);
@@ -405,11 +401,19 @@ async function convertToSVG(
       const pageNum = targetPages[i]!;
       if (pageNum < 1 || pageNum > pageCount) continue;
 
-      const page = doc.getPage(pageNum - 1);
-      const { width, height } = page.getSize();
-
-      // Generate placeholder SVG
-      const svgContent = createPlaceholderSVG(width, height, pageNum, pageCount);
+      const page = await doc.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 1 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.ceil(viewport.width);
+      canvas.height = Math.ceil(viewport.height);
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Canvas 2D rendering is unavailable');
+      await page.render({ canvasContext: context, viewport }).promise;
+      const dataUrl = canvas.toDataURL('image/png');
+      const svgContent = `<?xml version="1.0" encoding="UTF-8"?>\n` +
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${viewport.width} ${viewport.height}">` +
+        `<image width="${viewport.width}" height="${viewport.height}" href="${dataUrl}"/>` +
+        `</svg>`;
       const encoder = new TextEncoder();
       const svgBytes = encoder.encode(svgContent);
 
@@ -438,43 +442,17 @@ async function convertToSVG(
   }
 }
 
-/**
- * Create placeholder image data
- * In real implementation, this would be rendered by PDF.js
- */
-function createPlaceholderImageData(
-  format: 'png' | 'jpg' | 'jpeg' | 'webp',
-  _width: number,
-  _height: number,
-  pageNum: number,
-  totalPages: number
-): ArrayBuffer {
-  // Return minimal placeholder data
-  // Real implementation uses PDF.js canvas rendering
-  const encoder = new TextEncoder();
-  const placeholder = `[Image: Page ${pageNum}/${totalPages}, Format: ${format}]`;
-  return encoder.encode(placeholder).buffer as ArrayBuffer;
+async function loadPdfJs(bytes: Uint8Array): Promise<PDFDocumentProxy> {
+  return pdfjsLib.getDocument({ data: bytes.slice() }).promise;
 }
 
-/**
- * Create placeholder SVG
- */
-function createPlaceholderSVG(
-  width: number,
-  height: number,
-  pageNum: number,
-  totalPages: number
-): string {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
-  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, sans-serif" font-size="24" fill="#666">
-    Page ${pageNum} of ${totalPages}
-  </text>
-  <text x="50%" y="60%" text-anchor="middle" dominant-baseline="middle" font-family="system-ui, sans-serif" font-size="14" fill="#999">
-    Full SVG conversion requires PDF.js rendering
-  </text>
-</svg>`;
+function canvasBlob(canvas: HTMLCanvasElement, type: string, quality?: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error(`Canvas could not encode ${type}`));
+    }, type, quality);
+  });
 }
 
 /**
@@ -745,14 +723,11 @@ export async function extractTextWithOCR(
 
     // Check if we got meaningful text
     if (regularText && regularText.trim().length > 50) {
-      // Check if it's not just placeholder text
-      if (!regularText.includes('Text extraction requires PDF.js')) {
-        return {
-          success: true,
-          data: regularText,
-          duration: 0,
-        };
-      }
+      return {
+        success: true,
+        data: regularText,
+        duration: 0,
+      };
     }
 
     // Fall back to OCR

@@ -5,12 +5,16 @@
  * and pdf-lib for TOC insertion with clickable links
  */
 
-import { rgb, StandardFonts, PDFPage as PDFLibPage, PDFFont, PDFName, PDFArray } from 'pdf-lib';
-import * as pdfjsLib from 'pdfjs-dist';
-import type {
-  ProcessingResult,
-  ProgressCallback,
-} from '@pdflover/shared';
+import {
+  rgb,
+  StandardFonts,
+  PDFPage as PDFLibPage,
+  PDFFont,
+  PDFName,
+  PDFArray,
+} from "pdf-lib";
+import * as pdfjsLib from "pdfjs-dist";
+import type { ProcessingResult, ProgressCallback } from "@pdflover/shared";
 import {
   loadPDFDocument,
   createErrorResult,
@@ -18,12 +22,7 @@ import {
   measureTime,
   getPDFBytes,
   validatePDFBuffer,
-} from './utils.js';
-
-// Configure PDF.js worker
-if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-}
+} from "./utils.js";
 
 /**
  * Represents a single Table of Contents entry
@@ -89,7 +88,7 @@ export interface InsertTOCOptions {
   /** Title for the TOC page (default: "Table of Contents") */
   title?: string;
   /** Font to use for TOC entries */
-  font?: 'Helvetica' | 'TimesRoman' | 'Courier';
+  font?: "Helvetica" | "TimesRoman" | "Courier";
   /** Font size for TOC entries (default: 12) */
   fontSize?: number;
   /** Line spacing multiplier (default: 1.5) */
@@ -151,11 +150,11 @@ function generateTOCId(): string {
 function isBoldFont(fontName: string): boolean {
   const lowerName = fontName.toLowerCase();
   return (
-    lowerName.includes('bold') ||
-    lowerName.includes('heavy') ||
-    lowerName.includes('black') ||
-    lowerName.includes('semibold') ||
-    lowerName.includes('demibold')
+    lowerName.includes("bold") ||
+    lowerName.includes("heavy") ||
+    lowerName.includes("black") ||
+    lowerName.includes("semibold") ||
+    lowerName.includes("demibold")
   );
 }
 
@@ -164,7 +163,7 @@ function isBoldFont(fontName: string): boolean {
  */
 async function extractTextBlocksFromPage(
   page: pdfjsLib.PDFPageProxy,
-  pageNumber: number
+  pageNumber: number,
 ): Promise<AnalyzedTextBlock[]> {
   const textContent = await page.getTextContent();
   const blocks: AnalyzedTextBlock[] = [];
@@ -174,7 +173,7 @@ async function extractTextBlocksFromPage(
 
   for (const item of textContent.items) {
     const textItem = item as TextItem;
-    if (!textItem.str || textItem.str.trim() === '') continue;
+    if (!textItem.str || textItem.str.trim() === "") continue;
 
     // Get transform matrix to extract position and size
     const transform = textItem.transform;
@@ -183,7 +182,10 @@ async function extractTextBlocksFromPage(
     // Check if this is a new line (different Y position)
     if (Math.abs(y - currentY) > 2 && currentLine.length > 0) {
       // Process the previous line
-      const lineText = currentLine.map(t => t.str).join('').trim();
+      const lineText = currentLine
+        .map((t) => t.str)
+        .join("")
+        .trim();
       if (lineText) {
         const firstItem = currentLine[0]!;
         const firstTransform = firstItem.transform;
@@ -215,7 +217,10 @@ async function extractTextBlocksFromPage(
 
   // Process the last line
   if (currentLine.length > 0) {
-    const lineText = currentLine.map(t => t.str).join('').trim();
+    const lineText = currentLine
+      .map((t) => t.str)
+      .join("")
+      .trim();
     if (lineText) {
       const firstItem = currentLine[0]!;
       const firstTransform = firstItem.transform;
@@ -246,21 +251,30 @@ async function extractTextBlocksFromPage(
 /**
  * Detect heading styles from analyzed text blocks
  */
-function detectHeadingStylesFromBlocks(blocks: AnalyzedTextBlock[]): HeadingStyle[] {
+function detectHeadingStylesFromBlocks(
+  blocks: AnalyzedTextBlock[],
+): HeadingStyle[] {
   // Count font sizes and their occurrences
-  const fontSizeCounts = new Map<number, { count: number; boldCount: number }>();
+  const fontSizeCounts = new Map<
+    number,
+    { count: number; boldCount: number }
+  >();
 
   for (const block of blocks) {
     const roundedSize = Math.round(block.fontSize);
-    const existing = fontSizeCounts.get(roundedSize) || { count: 0, boldCount: 0 };
+    const existing = fontSizeCounts.get(roundedSize) || {
+      count: 0,
+      boldCount: 0,
+    };
     existing.count++;
     if (block.isBold) existing.boldCount++;
     fontSizeCounts.set(roundedSize, existing);
   }
 
   // Sort font sizes in descending order
-  const sortedSizes = Array.from(fontSizeCounts.entries())
-    .sort((a, b) => b[0] - a[0]);
+  const sortedSizes = Array.from(fontSizeCounts.entries()).sort(
+    (a, b) => b[0] - a[0],
+  );
 
   // Find the most common font size (likely body text)
   let bodyFontSize = 12;
@@ -307,7 +321,7 @@ function detectHeadingStylesFromBlocks(blocks: AnalyzedTextBlock[]): HeadingStyl
 function identifyHeadings(
   blocks: AnalyzedTextBlock[],
   styles: HeadingStyle[],
-  options: GenerateTOCOptions
+  options: GenerateTOCOptions,
 ): TOCEntry[] {
   const { minFontSize = 12, maxLevels = 3 } = options;
   const entries: TOCEntry[] = [];
@@ -372,10 +386,10 @@ function identifyHeadings(
  */
 export async function detectHeadingStyles(
   pdfData: ArrayBuffer,
-  options?: { pages?: number[]; onProgress?: ProgressCallback }
+  options?: { pages?: number[]; onProgress?: ProgressCallback },
 ): Promise<HeadingStyle[]> {
   const { pages, onProgress } = options || {};
-  const stages = ['Loading document', 'Analyzing text'];
+  const stages = ["Loading document", "Analyzing text"];
   const reportProgress = createProgressReporter(onProgress, stages);
 
   reportProgress(0, 0);
@@ -383,18 +397,21 @@ export async function detectHeadingStyles(
   const bytes = getPDFBytes(pdfData);
   const validation = validatePDFBuffer(bytes);
   if (!validation.valid) {
-    throw new Error(validation.errorMessage || 'Invalid PDF');
+    throw new Error(validation.errorMessage || "Invalid PDF");
   }
 
   // Load with PDF.js for text extraction
-  const loadingTask = pdfjsLib.getDocument({ data: bytes });
+  // PDF.js transfers the supplied buffer to its worker. Keep the caller's
+  // ArrayBuffer usable for a later pass (the UI detects styles, then entries).
+  const loadingTask = pdfjsLib.getDocument({ data: bytes.slice() });
   const pdfDoc = await loadingTask.promise;
 
   reportProgress(0, 100);
   reportProgress(1, 0);
 
   const pageCount = pdfDoc.numPages;
-  const pagesToAnalyze = pages || Array.from({ length: pageCount }, (_, i) => i + 1);
+  const pagesToAnalyze =
+    pages || Array.from({ length: pageCount }, (_, i) => i + 1);
   const allBlocks: AnalyzedTextBlock[] = [];
 
   for (let i = 0; i < pagesToAnalyze.length; i++) {
@@ -426,10 +443,14 @@ export async function detectHeadingStyles(
  */
 export async function extractHeadings(
   pdfData: ArrayBuffer,
-  options?: GenerateTOCOptions
+  options?: GenerateTOCOptions,
 ): Promise<TOCEntry[]> {
   const opts = options || {};
-  const stages = ['Loading document', 'Analyzing styles', 'Extracting headings'];
+  const stages = [
+    "Loading document",
+    "Analyzing styles",
+    "Extracting headings",
+  ];
   const reportProgress = createProgressReporter(opts.onProgress, stages);
 
   reportProgress(0, 0);
@@ -437,18 +458,19 @@ export async function extractHeadings(
   const bytes = getPDFBytes(pdfData);
   const validation = validatePDFBuffer(bytes);
   if (!validation.valid) {
-    throw new Error(validation.errorMessage || 'Invalid PDF');
+    throw new Error(validation.errorMessage || "Invalid PDF");
   }
 
   // Load with PDF.js for text extraction
-  const loadingTask = pdfjsLib.getDocument({ data: bytes });
+  const loadingTask = pdfjsLib.getDocument({ data: bytes.slice() });
   const pdfDoc = await loadingTask.promise;
 
   reportProgress(0, 100);
   reportProgress(1, 0);
 
   const pageCount = pdfDoc.numPages;
-  const pagesToAnalyze = opts.pages || Array.from({ length: pageCount }, (_, i) => i + 1);
+  const pagesToAnalyze =
+    opts.pages || Array.from({ length: pageCount }, (_, i) => i + 1);
   const allBlocks: AnalyzedTextBlock[] = [];
 
   for (let i = 0; i < pagesToAnalyze.length; i++) {
@@ -499,7 +521,7 @@ export async function extractHeadings(
  */
 export async function generateTOC(
   pdfData: ArrayBuffer,
-  options?: GenerateTOCOptions
+  options?: GenerateTOCOptions,
 ): Promise<TOCEntry[]> {
   return extractHeadings(pdfData, options);
 }
@@ -510,7 +532,7 @@ export async function generateTOC(
 function calculateTOCPages(
   entries: TOCEntry[],
   options: InsertTOCOptions,
-  pageHeight: number
+  pageHeight: number,
 ): number {
   const {
     margin = 50,
@@ -519,7 +541,7 @@ function calculateTOCPages(
     titleFontSize = 24,
   } = options;
 
-  const availableHeight = pageHeight - (2 * margin);
+  const availableHeight = pageHeight - 2 * margin;
   const titleHeight = titleFontSize * 2; // Title plus some spacing
   const lineHeight = fontSize * lineSpacing;
 
@@ -538,15 +560,15 @@ function drawDottedLeader(
   endX: number,
   y: number,
   font: PDFFont,
-  fontSize: number
+  fontSize: number,
 ): void {
-  const dotWidth = font.widthOfTextAtSize('.', fontSize);
+  const dotWidth = font.widthOfTextAtSize(".", fontSize);
   const spacing = dotWidth * 2;
   const numDots = Math.floor((endX - startX) / spacing);
 
-  let dots = '';
+  let dots = "";
   for (let i = 0; i < numDots; i++) {
-    dots += '. ';
+    dots += ". ";
   }
 
   page.drawText(dots, {
@@ -583,12 +605,12 @@ function drawDottedLeader(
 export async function insertTOC(
   pdfData: ArrayBuffer,
   tocEntries: TOCEntry[],
-  options?: InsertTOCOptions
+  options?: InsertTOCOptions,
 ): Promise<ProcessingResult> {
   const opts = options || {};
   const {
-    title = 'Table of Contents',
-    font = 'Helvetica',
+    title = "Table of Contents",
+    font = "Helvetica",
     fontSize = 12,
     lineSpacing = 1.5,
     includeLinks = true,
@@ -600,7 +622,12 @@ export async function insertTOC(
     onProgress,
   } = opts;
 
-  const stages = ['Loading document', 'Creating TOC pages', 'Adding links', 'Finalizing'];
+  const stages = [
+    "Loading document",
+    "Creating TOC pages",
+    "Adding links",
+    "Finalizing",
+  ];
   const reportProgress = createProgressReporter(onProgress, stages);
 
   const { result, duration } = await measureTime(async () => {
@@ -612,16 +639,12 @@ export async function insertTOC(
       return createErrorResult(
         validation.errorCode!,
         validation.errorMessage!,
-        0
+        0,
       );
     }
 
     if (tocEntries.length === 0) {
-      return createErrorResult(
-        'INVALID_PDF',
-        'No TOC entries provided',
-        0
-      );
+      return createErrorResult("INVALID_PDF", "No TOC entries provided", 0);
     }
 
     // Load with pdf-lib for modification
@@ -640,10 +663,10 @@ export async function insertTOC(
     // Get font
     let pdfFont: PDFFont;
     switch (font) {
-      case 'TimesRoman':
+      case "TimesRoman":
         pdfFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
         break;
-      case 'Courier':
+      case "Courier":
         pdfFont = await pdfDoc.embedFont(StandardFonts.Courier);
         break;
       default:
@@ -651,18 +674,18 @@ export async function insertTOC(
     }
 
     const boldFont = await pdfDoc.embedFont(
-      font === 'TimesRoman'
+      font === "TimesRoman"
         ? StandardFonts.TimesRomanBold
-        : font === 'Courier'
+        : font === "Courier"
           ? StandardFonts.CourierBold
-          : StandardFonts.HelveticaBold
+          : StandardFonts.HelveticaBold,
     );
 
     // Calculate layout
     const lineHeight = fontSize * lineSpacing;
     const titleHeight = titleFontSize + 30;
     const contentTop = pageHeight - margin - titleHeight;
-    const contentWidth = pageWidth - (2 * margin);
+    const contentWidth = pageWidth - 2 * margin;
     const pageNumberWidth = includePageNumbers ? 40 : 0;
 
     // Create TOC pages
@@ -689,7 +712,10 @@ export async function insertTOC(
       }
 
       // Draw entries
-      while (currentEntryIndex < tocEntries.length && currentY > margin + lineHeight) {
+      while (
+        currentEntryIndex < tocEntries.length &&
+        currentY > margin + lineHeight
+      ) {
         const entry = tocEntries[currentEntryIndex]!;
         const indent = (entry.level - 1) * indentPerLevel;
         const textX = margin + indent;
@@ -699,7 +725,7 @@ export async function insertTOC(
         let displayTitle = entry.title;
         let titleWidth = pdfFont.widthOfTextAtSize(displayTitle, fontSize);
         while (titleWidth > maxTextWidth && displayTitle.length > 10) {
-          displayTitle = displayTitle.slice(0, -4) + '...';
+          displayTitle = displayTitle.slice(0, -4) + "...";
           titleWidth = pdfFont.widthOfTextAtSize(displayTitle, fontSize);
         }
 
@@ -717,7 +743,10 @@ export async function insertTOC(
         if (includePageNumbers) {
           // Account for the TOC pages offset
           const displayPageNum = (entry.page + numTOCPages).toString();
-          const pageNumWidth = pdfFont.widthOfTextAtSize(displayPageNum, fontSize);
+          const pageNumWidth = pdfFont.widthOfTextAtSize(
+            displayPageNum,
+            fontSize,
+          );
           const pageNumX = pageWidth - margin - pageNumWidth;
 
           tocPage.drawText(displayPageNum, {
@@ -733,7 +762,14 @@ export async function insertTOC(
             const leaderStart = textX + titleWidth + 5;
             const leaderEnd = pageNumX - 5;
             if (leaderEnd - leaderStart > 20) {
-              drawDottedLeader(tocPage, leaderStart, leaderEnd, currentY, pdfFont, fontSize);
+              drawDottedLeader(
+                tocPage,
+                leaderStart,
+                leaderEnd,
+                currentY,
+                pdfFont,
+                fontSize,
+              );
             }
           }
         }
@@ -757,27 +793,48 @@ export async function insertTOC(
         // Calculate starting entry for this page
         const entriesPerPage = Math.ceil(tocEntries.length / numTOCPages);
         const startEntry = pageIndex * entriesPerPage;
-        const endEntry = Math.min(startEntry + entriesPerPage, tocEntries.length);
+        const endEntry = Math.min(
+          startEntry + entriesPerPage,
+          tocEntries.length,
+        );
 
-        for (let i = startEntry; i < endEntry && currentY > margin + lineHeight; i++) {
+        for (
+          let i = startEntry;
+          i < endEntry && currentY > margin + lineHeight;
+          i++
+        ) {
           const entry = tocEntries[i]!;
           const indent = (entry.level - 1) * indentPerLevel;
           const textX = margin + indent;
-          const displayTitle = entry.title.length > 50 ? entry.title.slice(0, 47) + '...' : entry.title;
+          const displayTitle =
+            entry.title.length > 50
+              ? entry.title.slice(0, 47) + "..."
+              : entry.title;
           const titleWidth = pdfFont.widthOfTextAtSize(displayTitle, fontSize);
 
           // Create link annotation
           const targetPageIndex = entry.page - 1 + numTOCPages;
           if (targetPageIndex >= 0 && targetPageIndex < pdfDoc.getPageCount()) {
             const linkAnnotation = pdfDoc.context.obj({
-              Type: 'Annot',
-              Subtype: 'Link',
-              Rect: [textX, currentY - 2, textX + titleWidth, currentY + fontSize + 2],
+              Type: "Annot",
+              Subtype: "Link",
+              Rect: [
+                textX,
+                currentY - 2,
+                textX + titleWidth,
+                currentY + fontSize + 2,
+              ],
               Border: [0, 0, 0],
-              Dest: [pdfDoc.getPage(targetPageIndex).ref, 'XYZ', null, null, null],
+              Dest: [
+                pdfDoc.getPage(targetPageIndex).ref,
+                "XYZ",
+                null,
+                null,
+                null,
+              ],
             });
 
-            const annotsKey = PDFName.of('Annots');
+            const annotsKey = PDFName.of("Annots");
             const annotationsRef = tocPage.node.get(annotsKey);
             if (annotationsRef && annotationsRef instanceof PDFArray) {
               annotationsRef.push(linkAnnotation);
@@ -797,7 +854,7 @@ export async function insertTOC(
     reportProgress(3, 0);
 
     // Set metadata
-    pdfDoc.setProducer('PDFLover');
+    pdfDoc.setProducer("PDFLover");
     pdfDoc.setModificationDate(new Date());
 
     reportProgress(3, 50);
@@ -848,7 +905,7 @@ export async function insertTOC(
 export async function generateAndInsertTOC(
   pdfData: ArrayBuffer,
   generateOptions?: GenerateTOCOptions,
-  insertOptions?: InsertTOCOptions
+  insertOptions?: InsertTOCOptions,
 ): Promise<ProcessingResult & { tocEntries?: TOCEntry[] }> {
   try {
     // Generate TOC
@@ -857,8 +914,8 @@ export async function generateAndInsertTOC(
     if (entries.length === 0) {
       return {
         success: false,
-        error: 'No headings found in the document',
-        errorCode: 'INVALID_PDF',
+        error: "No headings found in the document",
+        errorCode: "INVALID_PDF",
         duration: 0,
       };
     }
@@ -871,11 +928,11 @@ export async function generateAndInsertTOC(
       tocEntries: entries,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message = error instanceof Error ? error.message : "Unknown error";
     return {
       success: false,
       error: message,
-      errorCode: 'UNKNOWN_ERROR',
+      errorCode: "UNKNOWN_ERROR",
       duration: 0,
     };
   }
@@ -965,7 +1022,7 @@ export function flattenTOCHierarchy(entries: TOCEntry[]): TOCEntry[] {
 export function createTOCEntry(
   title: string,
   page: number,
-  level: number = 1
+  level: number = 1,
 ): TOCEntry {
   return {
     id: generateTOCId(),

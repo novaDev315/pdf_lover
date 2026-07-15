@@ -302,8 +302,8 @@ export interface ExtractionSummary {
     ids: number;
     customMatches: number;
   };
-  /** Total monetary value (sum of amounts in USD) */
-  totalAmountUSD?: number;
+  /** Monetary totals grouped by the currency detected in the document. */
+  totalsByCurrency: Record<string, number>;
   /** Date range (earliest and latest dates found) */
   dateRange?: {
     earliest?: Date;
@@ -1232,21 +1232,6 @@ export function extractCustomPatterns(
 // ============================================================================
 
 /**
- * Exchange rates for converting to USD (approximate)
- */
-const EXCHANGE_RATES: Record<string, number> = {
-  USD: 1,
-  EUR: 1.09,
-  GBP: 1.27,
-  JPY: 0.0067,
-  INR: 0.012,
-  CAD: 0.74,
-  AUD: 0.65,
-  CHF: 1.13,
-  CNY: 0.14,
-};
-
-/**
  * Extract all key information from PDF text content
  *
  * This is the main entry point for extracting structured information
@@ -1412,14 +1397,10 @@ export async function extractKeyInformation(
       // Stage 5: Build summary
       reportProgress(4, 0);
 
-      // Calculate total amount in USD
-      let totalAmountUSD: number | undefined;
-      if (allAmounts.length > 0) {
-        totalAmountUSD = allAmounts.reduce((sum, amount) => {
-          const rate = EXCHANGE_RATES[amount.currency] || 1;
-          return sum + (amount.value * rate);
-        }, 0);
-      }
+      const totalsByCurrency = allAmounts.reduce<Record<string, number>>((totals, amount) => {
+        totals[amount.currency] = (totals[amount.currency] ?? 0) + amount.value;
+        return totals;
+      }, {});
 
       // Find date range
       let dateRange: { earliest?: Date; latest?: Date } | undefined;
@@ -1462,7 +1443,7 @@ export async function extractKeyInformation(
           ids: allIds.length,
           customMatches: allCustomMatches.length,
         },
-        totalAmountUSD,
+        totalsByCurrency,
         dateRange,
         uniqueDomains: Array.from(domains).sort(),
         pagesWithContent: Array.from(pagesWithContent).sort((a, b) => a - b),

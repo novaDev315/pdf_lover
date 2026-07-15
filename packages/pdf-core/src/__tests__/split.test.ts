@@ -14,13 +14,15 @@ vi.mock('pdf-lib', () => {
 
   let pageCount = 5;
 
-  const createMockDoc = (pages: number = 5) => ({
-    getPageCount: vi.fn(() => pages),
+  const createMockDoc = (pages: number = 5) => {
+    let currentPages = pages;
+    return {
+    getPageCount: vi.fn(() => currentPages),
     getPage: vi.fn(() => mockPage),
     copyPages: vi.fn().mockImplementation(async (_source, indices) =>
       indices.map(() => mockPage)
     ),
-    addPage: vi.fn(),
+    addPage: vi.fn(() => { currentPages += 1; }),
     setProducer: vi.fn(),
     setModificationDate: vi.fn(),
     setTitle: vi.fn(),
@@ -29,10 +31,12 @@ vi.mock('pdf-lib', () => {
       getFields: vi.fn(() => []),
       flatten: vi.fn(),
     })),
-    save: vi.fn().mockResolvedValue(
-      new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34])
-    ),
-  });
+    save: vi.fn().mockImplementation(async () => {
+      const bytes = new Uint8Array(Math.max(8, currentPages * 700));
+      bytes.set([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+      return bytes;
+    }),
+  }};
 
   return {
     PDFDocument: {
@@ -44,6 +48,20 @@ vi.mock('pdf-lib', () => {
     },
   };
 });
+
+vi.mock('pdfjs-dist', () => ({
+  getDocument: vi.fn(() => ({
+    promise: Promise.resolve({
+      getOutline: vi.fn().mockResolvedValue([
+        { title: 'First section', dest: [0], items: [] },
+        { title: 'Second section', dest: [3], items: [] },
+      ]),
+      getDestination: vi.fn(),
+      getPageIndex: vi.fn(),
+      destroy: vi.fn().mockResolvedValue(undefined),
+    }),
+  })),
+}));
 
 // Create a valid PDF buffer for testing
 const createValidPdfBuffer = (size: number = 100): ArrayBuffer => {
@@ -173,21 +191,22 @@ describe('splitPDF', () => {
   });
 
   describe('size mode', () => {
-    it('should split PDF in half for size mode', async () => {
+    it('should create greedy ranges that stay under the requested size', async () => {
       const pdfBuffer = createValidPdfBuffer(100);
       const result = await splitPDF({
         document: pdfBuffer,
         mode: 'size',
+        maxSizeBytes: 2200,
         outputPrefix: 'part',
       });
 
       expect(result.success).toBe(true);
-      expect(result.files!.length).toBe(2); // Split in half
+      expect(result.files!.length).toBe(2);
     });
   });
 
   describe('bookmark mode', () => {
-    it('should handle bookmark mode (returns whole document)', async () => {
+    it('should split at top-level bookmark destinations', async () => {
       const pdfBuffer = createValidPdfBuffer(100);
       const result = await splitPDF({
         document: pdfBuffer,
@@ -195,7 +214,8 @@ describe('splitPDF', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.files!.length).toBe(1);
+      expect(result.files!.length).toBe(2);
+      expect(result.files?.map((file) => file.pageCount)).toEqual([3, 2]);
     });
   });
 
