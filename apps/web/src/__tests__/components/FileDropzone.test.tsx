@@ -52,7 +52,8 @@ describe('FileDropzone', () => {
       render(<FileDropzone onFilesAccepted={onFilesAccepted} />);
 
       expect(screen.getByText(/drag & drop/i)).toBeInTheDocument();
-      expect(screen.getByText(/pdf files/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Add files' })).toBeInTheDocument();
+      expect(screen.getByText(/processing details/i)).toBeInTheDocument();
     });
 
     it('should render custom children when provided', () => {
@@ -73,7 +74,7 @@ describe('FileDropzone', () => {
         />
       );
 
-      expect(screen.getByText(/100 mb/i)).toBeInTheDocument();
+      expect(screen.getByText(/up to 100 mb/i)).toBeInTheDocument();
     });
 
     it('should show max files when not Infinity', () => {
@@ -229,21 +230,21 @@ describe('FileDropzone', () => {
     it('should change style on drag enter', async () => {
       render(<FileDropzone onFilesAccepted={onFilesAccepted} />);
 
-      const dropzone = screen.getByText(/drag & drop/i).closest('div')!;
+      const dropzone = screen.getByRole('button', { name: 'Add files' });
 
       fireEvent.dragEnter(dropzone, {
         dataTransfer: createDataTransfer([createMockPdfFile()]),
       });
 
       await waitFor(() => {
-        expect(dropzone).toHaveClass('border-primary');
+        expect(dropzone).toHaveClass('border-emerald-500');
       });
     });
 
     it('should revert style on drag leave', async () => {
       render(<FileDropzone onFilesAccepted={onFilesAccepted} />);
 
-      const dropzone = screen.getByText(/drag & drop/i).closest('div')!;
+      const dropzone = screen.getByRole('button', { name: 'Add files' });
 
       fireEvent.dragEnter(dropzone, {
         dataTransfer: createDataTransfer([createMockPdfFile()]),
@@ -259,7 +260,7 @@ describe('FileDropzone', () => {
     it('should accept files on drop', async () => {
       render(<FileDropzone onFilesAccepted={onFilesAccepted} />);
 
-      const dropzone = screen.getByText(/drag & drop/i).closest('div')!;
+      const dropzone = screen.getByRole('button', { name: 'Add files' });
       const file = createMockPdfFile();
       const dt = createDataTransfer([file]);
 
@@ -279,7 +280,7 @@ describe('FileDropzone', () => {
         <FileDropzone onFilesAccepted={onFilesAccepted} disabled={true} />
       );
 
-      const dropzone = screen.getByText(/drag & drop/i).closest('div')!;
+      const dropzone = screen.getByRole('button', { name: 'Add files' });
       expect(dropzone).toHaveClass('opacity-50');
       expect(dropzone).toHaveClass('cursor-not-allowed');
     });
@@ -342,7 +343,7 @@ describe('FileDropzone', () => {
       const user = userEvent.setup();
       render(<FileDropzone onFilesAccepted={onFilesAccepted} />);
 
-      const dropzone = screen.getByText(/drag & drop/i).closest('div')!;
+      const dropzone = screen.getByRole('button', { name: 'Add files' });
 
       // Clicking should trigger file input
       await user.click(dropzone);

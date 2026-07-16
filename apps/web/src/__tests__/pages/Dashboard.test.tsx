@@ -64,4 +64,12 @@ describe('Dashboard navigation', () => {
     expect(screen.getByRole('link', { name: 'Open Sign PDF' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Open Merge PDFs' })).not.toBeInTheDocument();
   });
+
+  it('focuses tool search with the slash shortcut', () => {
+    renderDashboard();
+
+    fireEvent.keyDown(window, { key: '/' });
+
+    expect(screen.getByRole('searchbox', { name: 'Search PDF tools' })).toHaveFocus();
+  });
 });

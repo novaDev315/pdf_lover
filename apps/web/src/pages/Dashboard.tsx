@@ -198,8 +198,28 @@ function RecentFileItem({ file, onToggleFavorite, onDelete }: RecentFileItemProp
 export function Dashboard() {
   const files = useFileStore(useShallow(selectFilteredFiles));
   const { toggleFavorite, removeFile } = useFileStore();
+  const toolSearchRef = React.useRef<HTMLInputElement>(null);
   const [toolQuery, setToolQuery] = React.useState('');
   const [activeCategory, setActiveCategory] = React.useState<ToolCategoryId | 'all'>('all');
+
+  React.useEffect(() => {
+    const focusToolSearch = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      const isTyping =
+        target.tagName === 'INPUT'
+        || target.tagName === 'TEXTAREA'
+        || target.isContentEditable;
+
+      if (event.key === '/' && !isTyping && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        toolSearchRef.current?.focus();
+        toolSearchRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+      }
+    };
+
+    window.addEventListener('keydown', focusToolSearch);
+    return () => window.removeEventListener('keydown', focusToolSearch);
+  }, []);
 
   const handleToggleFavorite = React.useCallback(async (id: string) => {
     const file = useFileStore.getState().files.find((candidate) => candidate.id === id);
@@ -275,51 +295,51 @@ export function Dashboard() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
-        <section className="grid gap-8 border-b border-surface-200 pb-10 dark:border-surface-800 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
+        <section className="grid gap-5 border-b border-surface-200 pb-7 dark:border-surface-800 sm:gap-8 sm:pb-10 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
           <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-sm font-medium text-primary-700 dark:border-primary-800 dark:bg-primary-950/60 dark:text-primary-300">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-primary-200 bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700 dark:border-primary-800 dark:bg-primary-950/60 dark:text-primary-300 sm:mb-4 sm:text-sm">
               <span className="h-1.5 w-1.5 rounded-full bg-primary-500" />
               {TOOL_CATALOG.length} PDF tools available
             </div>
-            <h1 className="max-w-3xl text-4xl font-bold tracking-tight text-surface-950 dark:text-white sm:text-5xl">
+            <h1 className="max-w-3xl text-[2rem] font-bold leading-[1.06] tracking-tight text-surface-950 dark:text-white sm:text-5xl sm:leading-[1.05]">
               Every PDF tool, one click away.
             </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-surface-600 dark:text-surface-300 sm:text-lg">
+            <p className="mt-3 max-w-2xl text-[15px] leading-6 text-surface-600 dark:text-surface-300 sm:mt-4 sm:text-lg sm:leading-7">
               Choose a task below instead of remembering routes. Browser-safe work stays local; tools that need the backend explain the temporary upload first.
             </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button size="lg" asChild>
-                <Link to="/editor">
-                  Open PDF editor
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+            <div className="mt-5 grid grid-cols-2 gap-2 sm:mt-6 sm:flex sm:flex-wrap sm:gap-3">
+              <Button className="px-4 sm:px-8" size="lg" asChild>
+                <a href="#all-tools">
+                  Find a tool
+                  <ArrowRight className="ml-1 h-4 w-4 sm:ml-2" />
+                </a>
               </Button>
-              <Button size="lg" variant="outline" asChild>
-                <Link to="/files">Open document library</Link>
+              <Button className="px-4 sm:px-8" size="lg" variant="outline" asChild>
+                <Link to="/files">Open library</Link>
               </Button>
             </div>
           </div>
 
-          <aside className="rounded-2xl border border-surface-200 bg-card p-5 shadow-sm dark:border-surface-800 dark:bg-surface-900" aria-label="Privacy model">
+          <aside className="rounded-2xl border border-surface-200 bg-card p-4 shadow-sm dark:border-surface-800 dark:bg-surface-900 sm:p-5" aria-label="Privacy model">
             <div className="flex gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 sm:h-10 sm:w-10">
                 <ShieldCheck className="h-5 w-5" aria-hidden="true" />
               </div>
               <div>
                 <h2 className="font-semibold text-surface-950 dark:text-white">Local by default</h2>
-                <p className="mt-1 text-sm leading-6 text-surface-600 dark:text-surface-400">
+                <p className="mt-1 text-sm leading-5 text-surface-600 dark:text-surface-400 sm:leading-6">
                   Your library lives in this browser. Server jobs are bounded, explicit, and temporary.
                 </p>
               </div>
             </div>
-            <div className="mt-4 flex items-center gap-2 border-t border-surface-100 pt-4 text-xs font-medium text-surface-500 dark:border-surface-800 dark:text-surface-400">
+            <div className="mt-4 hidden items-center gap-2 border-t border-surface-100 pt-4 text-xs font-medium text-surface-500 dark:border-surface-800 dark:text-surface-400 sm:flex">
               <Laptop className="h-4 w-4" aria-hidden="true" />
               No analytics and no permanent server library
             </div>
           </aside>
         </section>
 
-        <section id="all-tools" className="scroll-mt-24 py-10" aria-labelledby="all-tools-heading">
+        <section id="all-tools" className="scroll-mt-24 py-8 sm:py-10" aria-labelledby="all-tools-heading">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h2 id="all-tools-heading" className="text-2xl font-bold text-surface-950 dark:text-white">
@@ -334,12 +354,13 @@ export function Dashboard() {
               <label htmlFor="tool-search" className="sr-only">Search PDF tools</label>
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-surface-400" aria-hidden="true" />
               <Input
+                ref={toolSearchRef}
                 id="tool-search"
                 type="search"
                 value={toolQuery}
                 onChange={(event) => setToolQuery(event.target.value)}
                 placeholder="Search tools, formats, or tasks…"
-                className="h-11 rounded-xl bg-card pl-10 pr-10 dark:bg-surface-900"
+                className="h-11 rounded-xl bg-card pl-10 pr-12 dark:bg-surface-900"
               />
               {toolQuery && (
                 <button
@@ -351,10 +372,15 @@ export function Dashboard() {
                   <X className="h-4 w-4" />
                 </button>
               )}
+              {!toolQuery && (
+                <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border border-surface-200 bg-surface-50 px-1.5 py-0.5 font-sans text-[11px] font-medium text-surface-500 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-400 sm:block">
+                  /
+                </kbd>
+              )}
             </div>
           </div>
 
-          <div className="mt-6 flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Filter tools by category">
+          <div className="scrollbar-none mt-6 flex gap-2 overflow-x-auto pb-2" role="group" aria-label="Filter tools by category">
             <button
               type="button"
               onClick={() => setActiveCategory('all')}

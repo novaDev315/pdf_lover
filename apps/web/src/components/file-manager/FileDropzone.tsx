@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useDropzone, type Accept, type FileRejection } from 'react-dropzone'
-import { Upload, FileText, AlertCircle } from 'lucide-react'
+import { Upload, FileText, AlertCircle, ShieldCheck } from 'lucide-react'
 
 import { cn, formatFileSize, isPdfFile } from '@/lib/utils'
 
@@ -50,10 +50,16 @@ export function FileDropzone({
   className,
   children,
 }: FileDropzoneProps) {
+  const helpId = React.useId()
   const [error, setError] = React.useState<string | null>(null)
   const pdfOnly = Object.keys(accept).every((type) =>
     type === 'application/pdf' || type === 'application/x-pdf'
   )
+  const acceptedExtensions = React.useMemo(() => {
+    const extensions = Object.values(accept).flat().filter(Boolean)
+    if (extensions.length === 0) return 'Selected file types'
+    return extensions.map((extension) => extension.toUpperCase()).join(', ')
+  }, [accept])
 
   const onDrop = React.useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
@@ -139,12 +145,16 @@ export function FileDropzone({
     <div className={cn('w-full', className)}>
       <div
         {...getRootProps()}
+        role="button"
+        aria-label={multiple ? 'Add files' : 'Add a file'}
+        aria-describedby={children ? undefined : helpId}
+        aria-disabled={disabled}
         className={cn(
-          'relative flex min-h-[200px] cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors',
-          isDragActive && 'border-primary bg-primary/5',
-          isDragAccept && 'border-green-500 bg-green-50 dark:bg-green-950',
+          'group relative flex min-h-[220px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border border-dashed p-6 text-center transition-[border-color,background-color,box-shadow] duration-200',
+          isDragActive && 'border-primary bg-primary/5 shadow-[inset_0_0_0_1px_hsl(var(--primary))]',
+          isDragAccept && 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950',
           isDragReject && 'border-red-500 bg-red-50 dark:bg-red-950',
-          !isDragActive && 'border-muted-foreground/25 hover:border-primary/50',
+          !isDragActive && 'border-surface-300 bg-surface-50/60 hover:border-primary/50 hover:bg-primary/5 dark:border-surface-700 dark:bg-surface-900/40',
           disabled && 'cursor-not-allowed opacity-50',
           error && 'border-red-500'
         )}
@@ -158,49 +168,56 @@ export function FileDropzone({
         {children ? (
           children
         ) : (
-          <div className="flex flex-col items-center gap-4 text-center">
-            {isDragReject ? (
-              <AlertCircle className="h-12 w-12 text-red-500" />
-            ) : isDragAccept ? (
-              <FileText className="h-12 w-12 text-green-500" />
-            ) : (
-              <Upload
-                className={cn(
-                  'h-12 w-12',
-                  isDragActive ? 'text-primary' : 'text-muted-foreground'
-                )}
-              />
-            )}
+          <div className="flex max-w-md flex-col items-center gap-4">
+            <div
+              className={cn(
+                'flex h-14 w-14 items-center justify-center rounded-2xl border bg-card shadow-sm transition-transform duration-200 group-hover:-translate-y-0.5',
+                isDragReject && 'border-red-200 text-red-500 dark:border-red-900',
+                isDragAccept && 'border-emerald-200 text-emerald-600 dark:border-emerald-900',
+                !isDragActive && 'border-surface-200 text-primary dark:border-surface-700',
+              )}
+            >
+              {isDragReject ? (
+                <AlertCircle className="h-7 w-7" aria-hidden="true" />
+              ) : isDragAccept ? (
+                <FileText className="h-7 w-7" aria-hidden="true" />
+              ) : (
+                <Upload className="h-7 w-7" aria-hidden="true" />
+              )}
+            </div>
 
             <div className={cn(
-              'space-y-2',
+              'flex flex-col items-center gap-1.5',
               disabled && 'cursor-not-allowed opacity-50',
               isDragActive && 'border-primary',
             )}>
-              <p className="text-lg font-medium">
+              <p className="text-base font-semibold text-surface-950 dark:text-white sm:text-lg">
                 {isDragActive
                   ? isDragReject
                     ? 'Invalid file type'
                     : 'Drop your files here'
-                  : 'Drag & drop your PDF files here'}
+                  : `Drag & drop ${pdfOnly ? 'PDF ' : ''}${multiple ? 'files' : 'a file'}`}
               </p>
-              <p className="text-sm text-muted-foreground">
-                or click to browse files
+              <p id={helpId} className="text-sm text-muted-foreground">
+                or <span className="font-medium text-primary group-hover:underline">choose from your device</span>
               </p>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-2 text-xs text-muted-foreground">
-              <span className="rounded-full bg-muted px-2 py-1">
-                Accepted: .pdf
-              </span>
-              <span className="rounded-full bg-muted px-2 py-1">
-                Max {formatFileSize(maxSize)}
-              </span>
+            <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <span>{acceptedExtensions}</span>
+              <span aria-hidden="true">·</span>
+              <span>Up to {formatFileSize(maxSize)}</span>
               {maxFiles !== Infinity && (
-                <span className="rounded-full bg-muted px-2 py-1">
-                  Max {maxFiles} files
-                </span>
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>Max {maxFiles} {maxFiles === 1 ? 'file' : 'files'}</span>
+                </>
               )}
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+              Processing details are shown before you continue
             </div>
           </div>
         )}
@@ -208,7 +225,7 @@ export function FileDropzone({
 
       {/* Error message */}
       {error && (
-        <div className="mt-2 flex items-start gap-2 rounded-md bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950 dark:text-red-400">
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300" role="alert">
           <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
           <pre className="whitespace-pre-wrap font-sans">{error}</pre>
         </div>

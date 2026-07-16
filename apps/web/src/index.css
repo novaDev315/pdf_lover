@@ -219,6 +219,7 @@ html[data-accent='red'] { --accent-50: #fef2f2; --accent-100: #fee2e2; --accent-
   body {
     @apply bg-background text-foreground;
     min-height: 100vh;
+    text-rendering: optimizeLegibility;
   }
 }
 
@@ -320,6 +321,17 @@ html[data-accent='red'] { --accent-50: #fef2f2; --accent-100: #fee2e2; --accent-
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* =====================================================
    Utility Classes
    ===================================================== */
@@ -330,6 +342,15 @@ html[data-accent='red'] { --accent-50: #fef2f2; --accent-100: #fee2e2; --accent-
 .drag-over {
   border-color: hsl(var(--primary)) !important;
   background-color: hsl(var(--primary) / 0.05) !important;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
 }
 
 /* PDF page thumbnail styling */
