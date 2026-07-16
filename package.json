@@ -14,6 +14,7 @@
     "test:watch": "./node_modules/.bin/vitest",
     "test:coverage": "./node_modules/.bin/vitest run --coverage",
     "test:ui": "./node_modules/.bin/vitest --ui",
+    "test:web:production": "bash scripts/verify-web-production.sh",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
