@@ -4,10 +4,8 @@
  */
 
 import * as React from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Heart,
   Save,
   Download,
   Upload,
@@ -575,29 +573,8 @@ export function EditorPage() {
   if (!pdfDocument && loadingState === 'idle') {
     return (
       <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-        {/* Header */}
-        <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
-          <div className="max-w-full mx-auto px-4">
-            <div className="flex items-center justify-between h-14">
-              <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" asChild>
-                  <Link to="/">
-                    <ArrowLeft className="h-5 w-5" />
-                  </Link>
-                </Button>
-                <div className="flex items-center gap-2">
-                  <Heart className="h-6 w-6 text-primary-500" fill="currentColor" />
-                  <h1 className="text-lg font-bold text-surface-900 dark:text-white">
-                    PDF Editor
-                  </h1>
-                </div>
-              </div>
-            </div>
-          </div>
-        </header>
-
         {/* Drop Zone */}
-        <main className="flex items-center justify-center p-8" style={{ height: 'calc(100vh - 56px)' }}>
+        <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center p-8">
           <div
             className={cn(
               'w-full max-w-2xl p-12 border-2 border-dashed rounded-xl',
@@ -674,19 +651,17 @@ export function EditorPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col">
-      {/* Header */}
-      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-20">
+      {/* Editor controls */}
+      <div
+        role="toolbar"
+        aria-label="PDF editor controls"
+        className="sticky top-16 z-[9] border-b border-surface-200 bg-card dark:border-surface-800 dark:bg-surface-900"
+      >
         <div className="px-4">
           <div className="flex items-center justify-between h-14">
             {/* Left Section */}
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" asChild>
-                <Link to="/">
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-              </Button>
               <div className="flex items-center gap-2">
-                <Heart className="h-5 w-5 text-primary-500" fill="currentColor" />
                 <h1
                   className="font-medium text-surface-900 dark:text-white truncate max-w-48"
                   aria-label={`PDF editor: ${fileName}`}
@@ -791,7 +766,7 @@ export function EditorPage() {
             </div>
           </div>
         </div>
-      </header>
+      </div>
 
       {/* Annotation Toolbar */}
       <div className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 px-4 py-2">

@@ -4,10 +4,7 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router-dom';
 import {
-  ArrowLeft,
-  Sparkles,
   BarChart3,
   Download,
   Brain,
@@ -157,26 +154,15 @@ export function ClassifyPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-      {/* Header */}
-      <div className="border-b border-surface-200 dark:border-surface-800 bg-card dark:bg-surface-900">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex items-center gap-4">
-            <Link
-              to="/"
-              className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 text-surface-600 dark:text-surface-400" />
-            </Link>
-            <div className="flex-1">
-              <h1 className="text-2xl font-bold text-surface-900 dark:text-white flex items-center gap-2">
-                <Sparkles className="h-7 w-7 text-purple-500" />
-                Document Classification
-              </h1>
-              <p className="text-surface-600 dark:text-surface-400 mt-1">
-                Automatically identify document types using AI-powered analysis
-              </p>
-            </div>
-          </div>
+      {/* Page introduction */}
+      <div className="max-w-7xl mx-auto px-4 pt-8 sm:px-6 lg:px-8">
+        <div>
+          <h1 className="text-3xl font-bold text-surface-900 dark:text-white">
+            Document Classification
+          </h1>
+          <p className="mt-2 text-surface-600 dark:text-surface-400">
+            Automatically identify document types using AI-powered analysis.
+          </p>
         </div>
       </div>
 

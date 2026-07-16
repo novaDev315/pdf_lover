@@ -4,8 +4,7 @@
  */
 
 import * as React from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Heart, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
+import { ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Maximize2, Minimize2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api'
 
@@ -151,34 +150,6 @@ export function KeyInfoPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex flex-col">
-      {/* Header */}
-      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
-        <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" asChild>
-                <Link to="/">
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-              </Button>
-              <div className="flex items-center gap-2">
-                <Heart className="h-6 w-6 text-primary-500" fill="currentColor" />
-                <span className="text-lg font-bold text-surface-900 dark:text-white">
-                  PDFLover
-                </span>
-              </div>
-            </div>
-            <nav className="flex items-center gap-2 text-sm text-surface-500">
-              <Link to="/" className="hover:text-surface-700 dark:hover:text-surface-300">
-                Home
-              </Link>
-              <span>/</span>
-              <span className="text-surface-900 dark:text-white font-medium">Key Information</span>
-            </nav>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col lg:flex-row">
         {/* PDF Preview Panel */}

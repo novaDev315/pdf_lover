@@ -3,9 +3,7 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router-dom';
 import {
-  ArrowLeft,
   History,
   Search,
   Filter,
@@ -398,23 +396,14 @@ export function HistoryPage() {
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
       <div className="max-w-6xl mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-6">
-          <Link
-            to="/"
-            className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 text-surface-600 dark:text-surface-400" />
-          </Link>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-surface-900 dark:text-white flex items-center gap-2">
-              <History className="h-7 w-7 text-primary-500" />
-              Operation History
-            </h1>
-            <p className="text-surface-600 dark:text-surface-400 mt-1">
-              View and manage your PDF operation history ({historyCount} operations)
-            </p>
-          </div>
+        {/* Page introduction */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-surface-900 dark:text-white">
+            Operation History
+          </h1>
+          <p className="mt-2 text-surface-600 dark:text-surface-400">
+            View and manage your PDF operation history ({historyCount} operations).
+          </p>
         </div>
 
         {/* Actions Bar */}

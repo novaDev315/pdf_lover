@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
-import { ArrowLeft, Download, FileText, Heart, MessageSquare, Pencil, Trash2, Upload } from 'lucide-react';
+import { Download, FileText, MessageSquare, Pencil, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { importPdfFiles } from '@/lib/import-pdf-files';
@@ -61,17 +61,15 @@ export function FilesPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-      <header className="border-b bg-card dark:bg-surface-900">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" asChild>
-              <Link to="/"><ArrowLeft className="h-5 w-5" /></Link>
-            </Button>
-            <Heart className="h-6 w-6 text-primary-500" fill="currentColor" />
-            <div>
-              <h1 className="font-semibold">Local document library</h1>
-              <p className="text-xs text-muted-foreground">Originals and versions stay in this browser</p>
-            </div>
+      <main className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-surface-900 dark:text-white">
+              Local document library
+            </h1>
+            <p className="mt-2 text-surface-600 dark:text-surface-400">
+              Originals and versions stay in this browser.
+            </p>
           </div>
           <Button onClick={() => inputRef.current?.click()} disabled={isImporting}>
             <Upload className="mr-2 h-4 w-4" />
@@ -88,9 +86,6 @@ export function FilesPage() {
             }}
           />
         </div>
-      </header>
-
-      <main className="mx-auto max-w-6xl space-y-4 p-4 sm:p-6">
         {(error ?? libraryError) && (
           <div className="whitespace-pre-wrap rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
             {error ?? libraryError}

@@ -7,7 +7,6 @@
 import * as React from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  ChevronLeft,
   FileText,
   Upload,
   Loader2,
@@ -297,14 +296,14 @@ export function ChatPage() {
 
   // Initialize AI model
   React.useEffect(() => {
-    if (aiSettings.provider === "local") {
-      initializeLocalModel(aiSettings.localModelId).then((result) => {
-        if (!result.success) {
-          console.error("Failed to initialize local model:", result.error);
-        }
-      });
-    }
-  }, [aiSettings.provider, aiSettings.localModelId]);
+    if (!currentDocument || aiSettings.provider !== "local") return;
+
+    initializeLocalModel(aiSettings.localModelId).then((result) => {
+      if (!result.success) {
+        console.error("Failed to initialize local model:", result.error);
+      }
+    });
+  }, [currentDocument, aiSettings.provider, aiSettings.localModelId]);
 
   // Handle sending a message
   const handleSendMessage = React.useCallback(
@@ -505,17 +504,6 @@ ${context.contextText}
   return (
     <div className="flex h-full">
       <h1 className="sr-only">Chat with PDF</h1>
-      {/* Back button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute left-4 top-4 z-10"
-        onClick={() => navigate("/")}
-        aria-label="Go back"
-      >
-        <ChevronLeft className="h-5 w-5" />
-      </Button>
-
       {/* PDF Viewer */}
       <div className={cn("flex-1 transition-all", chatOpen ? "mr-0" : "mr-0")}>
         <PDFViewer

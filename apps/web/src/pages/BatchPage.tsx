@@ -4,7 +4,6 @@
  */
 
 import * as React from 'react';
-import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import {
   DndContext,
@@ -32,7 +31,6 @@ import {
   Scissors,
   ScanText,
   Lock,
-  ArrowLeft,
   Plus,
   Trash2,
   GripVertical,
@@ -727,24 +725,15 @@ export function BatchPage() {
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex">
       {/* Main Content */}
       <div className="flex-1 p-6 overflow-auto">
-        {/* Header */}
+        {/* Page introduction */}
         <div className="max-w-4xl mx-auto mb-8">
-          <div className="flex items-center gap-4 mb-6">
-            <Link
-              to="/"
-              className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
-            >
-              <ArrowLeft className="h-5 w-5 text-surface-600 dark:text-surface-400" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-surface-900 dark:text-white flex items-center gap-2">
-                <Layers className="h-7 w-7 text-primary-500" />
-                Batch Operations
-              </h1>
-              <p className="text-surface-600 dark:text-surface-400 mt-1">
-                Process multiple PDFs at once with batch operations
-              </p>
-            </div>
+          <div className="mb-6">
+            <h1 className="text-3xl font-bold text-surface-900 dark:text-white">
+              Batch Operations
+            </h1>
+            <p className="mt-2 text-surface-600 dark:text-surface-400">
+              Process multiple PDFs at once with batch operations.
+            </p>
           </div>
 
           {/* Queue Stats Bar */}

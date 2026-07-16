@@ -13,6 +13,7 @@ import { LibraryHydrator } from "@/components/LibraryHydrator";
 import { PwaFileReceiver } from "@/components/PwaFileReceiver";
 import { SettingsEffects } from "@/components/layout/SettingsEffects";
 import { AppFooter } from "@/components/layout/AppFooter";
+import { ToolHeader } from "@/components/layout/ToolHeader";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const MergePage = lazy(() => import("@/pages/MergePage").then(({ MergePage }) => ({ default: MergePage })));
@@ -54,9 +55,16 @@ function RouteLoading() {
   );
 }
 
-function ToolPage({ children }: { children: React.ReactNode }) {
+function ToolPage({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="bg-surface-50 dark:bg-surface-950">
+    <div className="bg-surface-50 dark:bg-surface-950 [&>div]:min-h-[calc(100vh-4rem)]">
+      <ToolHeader title={title} />
       <Suspense fallback={<RouteLoading />}>{children}</Suspense>
       <AppFooter />
     </div>
@@ -139,29 +147,29 @@ function App() {
             {/* Routes */}
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/merge" element={<ToolPage><MergePage /></ToolPage>} />
-              <Route path="/split" element={<ToolPage><SplitPage /></ToolPage>} />
-              <Route path="/compress" element={<ToolPage><CompressPage /></ToolPage>} />
-              <Route path="/convert" element={<ToolPage><ConvertPage /></ToolPage>} />
-              <Route path="/security" element={<ToolPage><SecurityPage /></ToolPage>} />
-              <Route path="/watermark" element={<ToolPage><WatermarkPage /></ToolPage>} />
-              <Route path="/signature" element={<ToolPage><SignaturePage /></ToolPage>} />
-              <Route path="/chat" element={<ToolPage><ChatPage /></ToolPage>} />
-              <Route path="/editor" element={<ToolPage><EditorPage /></ToolPage>} />
-              <Route path="/settings" element={<ToolPage><SettingsPage /></ToolPage>} />
-              <Route path="/search" element={<ToolPage><SearchReplacePage /></ToolPage>} />
-              <Route path="/batch" element={<ToolPage><BatchPage /></ToolPage>} />
-              <Route path="/extract-images" element={<ToolPage><ExtractImagesPage /></ToolPage>} />
-              <Route path="/extract-tables" element={<ToolPage><ExtractTablesPage /></ToolPage>} />
-              <Route path="/page-numbers" element={<ToolPage><PageNumbersPage /></ToolPage>} />
-              <Route path="/crop-resize" element={<ToolPage><CropResizePage /></ToolPage>} />
-              <Route path="/compare" element={<ToolPage><ComparePage /></ToolPage>} />
-              <Route path="/toc" element={<ToolPage><TOCPage /></ToolPage>} />
-              <Route path="/form-detection" element={<ToolPage><FormDetectionPage /></ToolPage>} />
-              <Route path="/classify" element={<ToolPage><ClassifyPage /></ToolPage>} />
-              <Route path="/history" element={<ToolPage><HistoryPage /></ToolPage>} />
-              <Route path="/key-info" element={<ToolPage><KeyInfoPage /></ToolPage>} />
-              <Route path="/files" element={<ToolPage><FilesPage /></ToolPage>} />
+              <Route path="/merge" element={<ToolPage title="Merge PDF"><MergePage /></ToolPage>} />
+              <Route path="/split" element={<ToolPage title="Split PDF"><SplitPage /></ToolPage>} />
+              <Route path="/compress" element={<ToolPage title="Compress PDF"><CompressPage /></ToolPage>} />
+              <Route path="/convert" element={<ToolPage title="Convert PDF"><ConvertPage /></ToolPage>} />
+              <Route path="/security" element={<ToolPage title="Protect PDF"><SecurityPage /></ToolPage>} />
+              <Route path="/watermark" element={<ToolPage title="Add Watermark"><WatermarkPage /></ToolPage>} />
+              <Route path="/signature" element={<ToolPage title="Sign PDF"><SignaturePage /></ToolPage>} />
+              <Route path="/chat" element={<ToolPage title="Chat with PDF"><ChatPage /></ToolPage>} />
+              <Route path="/editor" element={<ToolPage title="PDF Editor"><EditorPage /></ToolPage>} />
+              <Route path="/settings" element={<ToolPage title="Settings"><SettingsPage /></ToolPage>} />
+              <Route path="/search" element={<ToolPage title="Search & Replace"><SearchReplacePage /></ToolPage>} />
+              <Route path="/batch" element={<ToolPage title="Batch Operations"><BatchPage /></ToolPage>} />
+              <Route path="/extract-images" element={<ToolPage title="Extract Images"><ExtractImagesPage /></ToolPage>} />
+              <Route path="/extract-tables" element={<ToolPage title="Extract Tables"><ExtractTablesPage /></ToolPage>} />
+              <Route path="/page-numbers" element={<ToolPage title="Page Numbers & Headers"><PageNumbersPage /></ToolPage>} />
+              <Route path="/crop-resize" element={<ToolPage title="Crop, Resize & Trim"><CropResizePage /></ToolPage>} />
+              <Route path="/compare" element={<ToolPage title="Compare PDFs"><ComparePage /></ToolPage>} />
+              <Route path="/toc" element={<ToolPage title="Table of Contents"><TOCPage /></ToolPage>} />
+              <Route path="/form-detection" element={<ToolPage title="Detect Form Fields"><FormDetectionPage /></ToolPage>} />
+              <Route path="/classify" element={<ToolPage title="Classify Document"><ClassifyPage /></ToolPage>} />
+              <Route path="/history" element={<ToolPage title="History"><HistoryPage /></ToolPage>} />
+              <Route path="/key-info" element={<ToolPage title="Extract Key Information"><KeyInfoPage /></ToolPage>} />
+              <Route path="/files" element={<ToolPage title="Library"><FilesPage /></ToolPage>} />
             </Routes>
           </GlobalKeyboardHandler>
         </BrowserRouter>

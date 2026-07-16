@@ -3,8 +3,7 @@
  */
 
 import * as React from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft, Heart, FileText, Eye, EyeOff } from 'lucide-react'
+import { FileText, Eye, EyeOff } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { TOCPanel } from '@/components/smart/TOCPanel'
@@ -72,66 +71,36 @@ export function TOCPage() {
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950">
-      {/* Header */}
-      <header className="bg-card dark:bg-surface-900 border-b border-surface-200 dark:border-surface-800 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" asChild>
-                <Link to="/">
-                  <ArrowLeft className="h-5 w-5" />
-                </Link>
-              </Button>
-              <div className="flex items-center gap-2">
-                <Heart className="h-6 w-6 text-primary-500" fill="currentColor" />
-                <span className="text-lg font-bold text-surface-900 dark:text-white">
-                  PDFLover
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowPreview(!showPreview)}
-                className="hidden lg:flex"
-              >
-                {showPreview ? (
-                  <>
-                    <EyeOff className="h-4 w-4 mr-2" />
-                    Hide Preview
-                  </>
-                ) : (
-                  <>
-                    <Eye className="h-4 w-4 mr-2" />
-                    Show Preview
-                  </>
-                )}
-              </Button>
-              <nav className="flex items-center gap-2 text-sm text-surface-500">
-                <Link to="/" className="hover:text-surface-700 dark:hover:text-surface-300">
-                  Home
-                </Link>
-                <span>/</span>
-                <span className="text-surface-900 dark:text-white font-medium">
-                  Table of Contents
-                </span>
-              </nav>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-surface-900 dark:text-white mb-2">
-            Generate Table of Contents
-          </h1>
-          <p className="text-surface-600 dark:text-surface-400">
-            Automatically detect headings in your PDF and create a clickable Table of Contents.
-            Edit, reorder, and customize entries before generating. All processing happens locally.
-          </p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-surface-900 dark:text-white mb-2">
+              Generate Table of Contents
+            </h1>
+            <p className="text-surface-600 dark:text-surface-400">
+              Automatically detect headings in your PDF and create a clickable Table of Contents.
+              Edit, reorder, and customize entries before generating. All processing happens locally.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPreview(!showPreview)}
+            className="hidden shrink-0 lg:flex"
+          >
+            {showPreview ? (
+              <>
+                <EyeOff className="mr-2 h-4 w-4" />
+                Hide Preview
+              </>
+            ) : (
+              <>
+                <Eye className="mr-2 h-4 w-4" />
+                Show Preview
+              </>
+            )}
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
