@@ -79,7 +79,7 @@ export function formatDate(
 ): string {
   const dateObj = date instanceof Date ? date : new Date(date);
   if (isNaN(dateObj.getTime())) return 'Invalid date';
-  return dateObj.toLocaleDateString(undefined, options);
+  return dateObj.toLocaleDateString(undefined, { timeZone: 'UTC', ...options });
 }
 
 /**
@@ -198,7 +198,9 @@ export function getMimeType(extension: string): string {
  * @returns Hex string of the hash
  */
 export async function calculateHash(buffer: ArrayBuffer): Promise<string> {
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  // A view avoids ArrayBuffer realm/brand mismatches between browser-like
+  // runtimes and their native SubtleCrypto implementation.
+  const hashBuffer = await crypto.subtle.digest('SHA-256', new Uint8Array(buffer));
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
 }

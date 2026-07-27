@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { runInNewContext } from 'node:vm';
 import {
   generateId,
   formatFileSize,
@@ -119,6 +120,18 @@ describe('formatDate', () => {
   it('should format a date string', () => {
     const result = formatDate('2024-01-15');
     expect(result).toContain('2024');
+    expect(result).toContain('15');
+  });
+
+  it('should respect an explicit timezone', () => {
+    const result = formatDate('2024-01-15', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'America/New_York',
+    });
+
+    expect(result).toContain('14');
   });
 
   it('should format a timestamp', () => {
@@ -582,8 +595,17 @@ describe('calculateHash', () => {
     const buffer = new ArrayBuffer(0);
     const hash = await calculateHash(buffer);
 
-    expect(hash).toBeDefined();
-    expect(hash.length).toBeGreaterThan(0);
+    expect(hash).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+  });
+
+  it('should preserve bytes from another runtime', async () => {
+    const buffer = runInNewContext('new Uint8Array([97, 98, 99]).buffer') as ArrayBuffer;
+
+    expect(buffer).not.toBeInstanceOf(ArrayBuffer);
+
+    const hash = await calculateHash(buffer);
+
+    expect(hash).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   });
 });
 
