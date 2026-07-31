@@ -54,7 +54,7 @@ if you run the API directly on the host.
 ### Install and run
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/novaDev315/pdf_lover.git
 cd pdf_lover
 cp .env.example .env
 bun install --frozen-lockfile
@@ -113,7 +113,7 @@ pdf_lover/
 │   ├── pdf-core/  Browser-native PDF operations
 │   └── shared/    Cross-runtime types, constants, and utilities
 ├── scripts/       Production verification helpers
-├── docs/          Product, implementation, and architecture notes
+├── docs/          Architecture and historical planning notes
 ├── homelab.yaml   Homelab build and deployment contract
 └── turbo.json     Monorepo task graph
 ```
@@ -124,9 +124,6 @@ pdf_lover/
 | `@pdflover/api`      | Capability discovery, temporary jobs, engine isolation, artifact lifecycle, OpenRouter proxy | Bun, Fastify, qpdf, Tesseract, Poppler, Python             |
 | `@pdflover/pdf-core` | Reusable browser-native PDF transformations                                                  | TypeScript, pdf-lib, PDF.js, Tesseract.js                  |
 | `@pdflover/shared`   | Serializable contracts and shared utilities                                                  | TypeScript                                                 |
-
-For design details and ownership boundaries, read
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Privacy and data lifecycle
 
@@ -228,9 +225,6 @@ test commands.
 4. Add focused tests alongside the owning module.
 5. Run the root quality checks before requesting review.
 
-Useful references:
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [Product requirements](docs/PRD.md)
-- [Implementation plan](docs/IMPLEMENTATION_PLAN.md)
-- [Documentation index](docs/README.md)
+Historical planning documents remain under `docs/` for project context. The
+current source, tests, and runtime capability endpoint are the authority for
+implemented behavior.
