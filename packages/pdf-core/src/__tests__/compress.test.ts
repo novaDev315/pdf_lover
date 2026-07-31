@@ -316,7 +316,7 @@ describe('estimateCompression', () => {
     const invalidBuffer = new ArrayBuffer(10);
     const result = await estimateCompression(invalidBuffer);
 
-    expect(result.estimatedSavings).toBe(10);
+    expect(result.estimatedSavings).toBe(0);
     expect(result.hasImages).toBe(false);
     expect(result.hasForms).toBe(false);
   });
@@ -326,8 +326,8 @@ describe('estimateCompression', () => {
     const pdfBuffer = createValidPdfBuffer(1000);
     const result = await estimateCompression(pdfBuffer);
 
-    // Base savings should be at least 5%
-    expect(result.estimatedSavings).toBeGreaterThanOrEqual(5);
+    // Structural optimization is not guaranteed to reduce a compact PDF.
+    expect(result.estimatedSavings).toBe(0);
   });
 });
 

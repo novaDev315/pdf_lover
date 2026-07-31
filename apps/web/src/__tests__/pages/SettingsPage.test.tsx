@@ -14,6 +14,13 @@ vi.mock('@/lib/storage', () => ({
   },
 }));
 
+vi.mock('@/hooks/useApiCapabilities', () => ({
+  useApiCapabilities: () => ({
+    data: { serviceVersion: 'test-api', ai: { openRouterConfigured: false } },
+    isLoading: false,
+  }),
+}));
+
 describe('SettingsPage navigation', () => {
   beforeEach(() => {
     vi.stubGlobal(

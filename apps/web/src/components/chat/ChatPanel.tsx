@@ -80,6 +80,8 @@ export interface ChatPanelProps {
   indexedChunkCount?: number
   /** Callback to re-index document */
   onReindex?: () => void
+  /** Whether the configured backend can serve cloud AI requests. */
+  cloudProviderAvailable?: boolean
 }
 
 /**
@@ -113,6 +115,7 @@ export function ChatPanel({
   isDocumentIndexed = false,
   indexedChunkCount = 0,
   onReindex,
+  cloudProviderAvailable = false,
 }: ChatPanelProps) {
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const messagesContainerRef = React.useRef<HTMLDivElement>(null)
@@ -363,6 +366,7 @@ export function ChatPanel({
                         aiSettings.provider === 'local' ? 'openrouter' : 'local'
                       )
                     }
+                    disabled={aiSettings.provider === 'local' && !cloudProviderAvailable}
                   >
                     {aiSettings.provider === 'local' ? (
                       <>
@@ -380,7 +384,9 @@ export function ChatPanel({
                 <TooltipContent>
                   <p>
                     {aiSettings.provider === 'local'
-                      ? 'Using local AI (private, runs in browser)'
+                      ? cloudProviderAvailable
+                        ? 'Using local AI (private, runs in browser)'
+                        : 'Cloud AI is unavailable on the configured backend'
                       : 'Using cloud AI (requires API key)'}
                   </p>
                 </TooltipContent>

@@ -30,6 +30,9 @@ export function AppFooter({ className }: AppFooterProps) {
           <Link className={linkClassName} to="/files">
             Library
           </Link>
+          <Link className={linkClassName} to="/batch">
+            Batch
+          </Link>
           <Link className={linkClassName} to="/history">
             History
           </Link>

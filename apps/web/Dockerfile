@@ -10,7 +10,11 @@ RUN bun install --frozen-lockfile
 
 FROM dependencies AS builder
 ARG VITE_API_BASE_URL=https://api.pdflover.lab.novadev.tech
+ARG VITE_BUILD_SHA=unknown
+ARG VITE_BUILD_TIME=unknown
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_BUILD_SHA=${VITE_BUILD_SHA}
+ENV VITE_BUILD_TIME=${VITE_BUILD_TIME}
 COPY apps/web apps/web
 COPY packages/pdf-core packages/pdf-core
 COPY packages/shared packages/shared
@@ -21,6 +25,7 @@ RUN bun run --filter @pdflover/web build
 
 FROM nginxinc/nginx-unprivileged:1.29-alpine AS production
 COPY apps/web/nginx.conf /etc/nginx/nginx.conf
+COPY apps/web/nginx-security-headers.conf /etc/nginx/pdflover-security-headers.conf
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 RUN nginx -t \
     && find /usr/share/nginx/html/assets -type f -name '*.mjs' -print -quit | grep -q .

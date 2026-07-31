@@ -12,6 +12,8 @@ import {
   X,
   TrendingDown,
   ArrowRight,
+  ShieldCheck,
+  AlertTriangle,
 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
@@ -37,6 +39,8 @@ import {
 import { compressPDF, estimateCompression } from '@pdflover/pdf-core'
 import type { ProgressInfo, CompressionLevel } from '@pdflover/shared'
 import { useSettingsStore } from '@/store/settings-store'
+import { useApiCapabilities } from '@/hooks/useApiCapabilities'
+import { getOperationCapability, runServerPdfOperation } from '@/lib/api'
 
 /**
  * Compression level configuration
@@ -50,23 +54,23 @@ interface CompressionConfig {
 const COMPRESSION_LEVELS: CompressionConfig[] = [
   {
     level: 'low',
-    label: 'Low',
-    description: 'Minimal compression, best quality',
+    label: 'Fast local',
+    description: 'Fast lossless structural rewrite; the interface may pause briefly',
   },
   {
     level: 'medium',
-    label: 'Medium',
-    description: 'Balanced compression and quality',
+    label: 'Responsive local',
+    description: 'The same lossless rewrite with balanced browser responsiveness',
   },
   {
     level: 'high',
-    label: 'High',
-    description: 'Higher compression, good quality',
+    label: 'Smooth local',
+    description: 'The same lossless rewrite with more frequent interface updates',
   },
   {
     level: 'maximum',
     label: 'Maximum',
-    description: 'Maximum compression, lower quality',
+    description: 'Lossy image recompression on the configured backend',
   },
 ]
 
@@ -106,10 +110,15 @@ export function CompressPanel({ className }: CompressPanelProps) {
   const [estimatedSavings, setEstimatedSavings] = React.useState<number | null>(null)
   const [compressedSize, setCompressedSize] = React.useState<number | null>(null)
   const [compressionResult, setCompressionResult] = React.useState<ArrayBuffer | null>(null)
+  const [serverConsent, setServerConsent] = React.useState(false)
   const { toast } = useToast()
   const { recordOperation } = useOperationHistory({ showToasts: false })
+  const capabilities = useApiCapabilities()
 
   const currentConfig = COMPRESSION_LEVELS[compressionLevel] ?? COMPRESSION_LEVELS[1]!
+  const isMaximum = currentConfig.level === 'maximum'
+  const maximumCapability = getOperationCapability(capabilities.data, 'pdf.compress.lossy')
+  const maximumAvailable = maximumCapability?.available === true
 
   /**
    * Handle file upload
@@ -121,6 +130,7 @@ export function CompressPanel({ className }: CompressPanelProps) {
     setFile(pdfFile)
     setCompressedSize(null)
     setCompressionResult(null)
+    setServerConsent(false)
 
     // Estimate compression
     try {
@@ -140,6 +150,7 @@ export function CompressPanel({ className }: CompressPanelProps) {
     setEstimatedSavings(null)
     setCompressedSize(null)
     setCompressionResult(null)
+    setServerConsent(false)
   }, [])
 
   /**
@@ -165,12 +176,31 @@ export function CompressPanel({ className }: CompressPanelProps) {
     setCompressionResult(null)
 
     try {
-      const buffer = await file.arrayBuffer()
-      const result = await compressPDF({
-        document: buffer,
-        level: currentConfig.level,
-        onProgress: handleProgress,
-      })
+      if (isMaximum && (!serverConsent || !maximumAvailable)) {
+        throw new Error('Maximum compression requires an available backend and upload consent')
+      }
+
+      const result = isMaximum
+        ? await runServerPdfOperation({
+            operation: 'pdf.compress.lossy',
+            file,
+            options: { quality: 60, dpi: 120 },
+            onProgress: handleProgress,
+          }).then((artifacts) => {
+            const artifact = artifacts[0]
+            if (!artifact) throw new Error('The server returned no compressed PDF')
+            return {
+              success: true as const,
+              data: artifact.data,
+              processedSize: artifact.data.byteLength,
+              error: undefined,
+            }
+          })
+        : await compressPDF({
+            document: await file.arrayBuffer(),
+            level: currentConfig.level,
+            onProgress: handleProgress,
+          })
 
       if (result.success && result.data) {
         setCompressedSize(result.processedSize ?? result.data.byteLength)
@@ -224,7 +254,7 @@ export function CompressPanel({ className }: CompressPanelProps) {
       setProgress(0)
       setProgressStage('')
     }
-  }, [file, currentConfig, handleProgress, toast])
+  }, [file, currentConfig.level, isMaximum, serverConsent, maximumAvailable, handleProgress, toast, recordOperation])
 
   /**
    * Download the compressed PDF
@@ -287,10 +317,12 @@ export function CompressPanel({ className }: CompressPanelProps) {
               </p>
               <p className="text-xs text-surface-500 dark:text-surface-400">
                 {formatFileSize(file.size)}
-                {estimatedSavings !== null && (
+                {isMaximum && estimatedSavings !== null && estimatedSavings > 0 ? (
                   <span className="ml-2 text-green-600 dark:text-green-400">
                     ~{estimatedSavings}% estimated savings
                   </span>
+                ) : (
+                  <span className="ml-2 text-surface-500">savings depend on document content</span>
                 )}
               </p>
             </div>
@@ -320,7 +352,12 @@ export function CompressPanel({ className }: CompressPanelProps) {
               </div>
               <Slider
                 value={[compressionLevel]}
-                onValueChange={([value]) => setCompressionLevel(value ?? 1)}
+                onValueChange={([value]) => {
+                  setCompressionLevel(value ?? 1)
+                  setServerConsent(false)
+                  setCompressedSize(null)
+                  setCompressionResult(null)
+                }}
                 min={0}
                 max={3}
                 step={1}
@@ -328,15 +365,44 @@ export function CompressPanel({ className }: CompressPanelProps) {
                 className="w-full"
               />
               <div className="flex justify-between text-xs text-surface-500 dark:text-surface-400">
-                <span>Low</span>
-                <span>Medium</span>
-                <span>High</span>
+                <span>Fast</span>
+                <span>Responsive</span>
+                <span>Smooth</span>
                 <span>Max</span>
               </div>
             </div>
             <p className="text-sm text-surface-600 dark:text-surface-400">
               {currentConfig.description}
             </p>
+          </div>
+        )}
+
+        {file && isMaximum && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/30">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div className="space-y-2">
+                <p className="font-medium text-blue-950 dark:text-blue-100">Temporary server processing required</p>
+                <p className="text-blue-800 dark:text-blue-200">
+                  Maximum mode uploads this PDF for lossy image recompression. Job files expire automatically.
+                </p>
+                <label className="flex cursor-pointer items-start gap-2 text-blue-950 dark:text-blue-100">
+                  <input
+                    type="checkbox"
+                    checked={serverConsent}
+                    onChange={(event) => setServerConsent(event.target.checked)}
+                    disabled={!maximumAvailable || isProcessing}
+                    className="mt-0.5 h-4 w-4"
+                  />
+                  I consent to temporary backend processing for this file.
+                </label>
+              </div>
+            </div>
+            {!capabilities.isLoading && !maximumAvailable && (
+              <p className="mt-3 text-amber-900 dark:text-amber-200" role="status">
+                {maximumCapability?.unavailableReason ?? 'Maximum compression is unavailable on the configured backend.'}
+              </p>
+            )}
           </div>
         )}
 
@@ -347,10 +413,15 @@ export function CompressPanel({ className }: CompressPanelProps) {
               <h4 className="text-sm font-medium text-surface-900 dark:text-white">
                 Compression Results
               </h4>
-              {compressionStats.savings > 0 && (
+              {compressionStats.savings > 0 ? (
                 <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium rounded-full">
                   <TrendingDown className="h-3 w-3" />
                   {compressionStats.savingsPercent.toFixed(1)}% smaller
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  <AlertTriangle className="h-3 w-3" />
+                  No size reduction
                 </span>
               )}
             </div>
@@ -367,11 +438,21 @@ export function CompressPanel({ className }: CompressPanelProps) {
 
               <ArrowRight className="h-5 w-5 text-surface-400 flex-shrink-0" />
 
-              <div className="flex-1 text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <div className={cn(
+                'flex-1 rounded-lg p-3 text-center',
+                compressionStats.savings > 0
+                  ? 'bg-green-50 dark:bg-green-900/20'
+                  : 'bg-amber-50 dark:bg-amber-900/20',
+              )}>
                 <p className="text-xs text-surface-500 dark:text-surface-400 mb-1">
                   Compressed
                 </p>
-                <p className="text-lg font-semibold text-green-600 dark:text-green-400">
+                <p className={cn(
+                  'text-lg font-semibold',
+                  compressionStats.savings > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-amber-700 dark:text-amber-300',
+                )}>
                   {formatFileSize(compressionStats.compressedSize)}
                 </p>
               </div>
@@ -380,6 +461,11 @@ export function CompressPanel({ className }: CompressPanelProps) {
             {compressionStats.savings > 0 && (
               <p className="text-sm text-center text-surface-600 dark:text-surface-400 mt-3">
                 Saved {formatFileSize(compressionStats.savings)}
+              </p>
+            )}
+            {compressionStats.savings <= 0 && (
+              <p className="mt-3 text-center text-sm text-amber-800 dark:text-amber-300">
+                This result is {formatFileSize(Math.abs(compressionStats.savings))} larger. Keep the original unless you need the recompressed copy.
               </p>
             )}
           </div>
@@ -402,14 +488,18 @@ export function CompressPanel({ className }: CompressPanelProps) {
         {file && (
           <div className="flex flex-col sm:flex-row gap-3">
             {compressionResult ? (
-              <Button onClick={handleDownload} className="flex-1">
+              <Button
+                onClick={handleDownload}
+                variant={compressionStats && compressionStats.savings <= 0 ? 'outline' : 'default'}
+                className="flex-1"
+              >
                 <Download className="h-4 w-4 mr-2" />
-                Download Compressed PDF
+                {compressionStats && compressionStats.savings <= 0 ? 'Download Larger Result' : 'Download Compressed PDF'}
               </Button>
             ) : (
               <Button
                 onClick={handleCompress}
-                disabled={isProcessing}
+                disabled={isProcessing || (isMaximum && (!serverConsent || !maximumAvailable))}
                 className="flex-1"
               >
                 {isProcessing ? (
@@ -429,8 +519,8 @@ export function CompressPanel({ className }: CompressPanelProps) {
             <AddToBatchButton
               operationType="compress"
               files={[file]}
-              options={{ level: currentConfig.level }}
-              disabled={isProcessing}
+              options={{ level: currentConfig.level, serverConsent }}
+              disabled={isProcessing || (isMaximum && !maximumAvailable)}
               onAdded={handleClearFile}
             />
 

@@ -15,6 +15,7 @@ import { SettingsEffects } from "@/components/layout/SettingsEffects";
 import { AppFooter } from "@/components/layout/AppFooter";
 import { ToolHeader } from "@/components/layout/ToolHeader";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { GlobalBatchQueue } from "@/components/batch/GlobalBatchQueue";
 
 const MergePage = lazy(() => import("@/pages/MergePage").then(({ MergePage }) => ({ default: MergePage })));
 const SplitPage = lazy(() => import("@/pages/SplitPage").then(({ SplitPage }) => ({ default: SplitPage })));
@@ -133,6 +134,7 @@ function App() {
         <BrowserRouter>
           <LibraryHydrator />
           <PwaFileReceiver />
+          <GlobalBatchQueue />
           {/* PWA Components */}
           <OfflineIndicator
             variant="toast"
@@ -157,7 +159,7 @@ function App() {
               <Route path="/chat" element={<ToolPage title="Chat with PDF"><ChatPage /></ToolPage>} />
               <Route path="/editor" element={<ToolPage title="PDF Editor"><EditorPage /></ToolPage>} />
               <Route path="/settings" element={<ToolPage title="Settings"><SettingsPage /></ToolPage>} />
-              <Route path="/search" element={<ToolPage title="Search & Replace"><SearchReplacePage /></ToolPage>} />
+              <Route path="/search" element={<ToolPage title="Search & Overlay"><SearchReplacePage /></ToolPage>} />
               <Route path="/batch" element={<ToolPage title="Batch Operations"><BatchPage /></ToolPage>} />
               <Route path="/extract-images" element={<ToolPage title="Extract Images"><ExtractImagesPage /></ToolPage>} />
               <Route path="/extract-tables" element={<ToolPage title="Extract Tables"><ExtractTablesPage /></ToolPage>} />

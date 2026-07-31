@@ -79,6 +79,7 @@ export interface SecurityOptions {
     copy: boolean;
     modify: boolean;
   };
+  serverConsent?: boolean;
 }
 
 export interface TrimOptions {

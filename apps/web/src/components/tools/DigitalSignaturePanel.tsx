@@ -2,7 +2,8 @@ import * as React from 'react';
 import { BadgeCheck, Download, FileKey2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { runServerPdfOperation } from '@/lib/api';
+import { getOperationCapability, runServerPdfOperation } from '@/lib/api';
+import { useApiCapabilities } from '@/hooks/useApiCapabilities';
 
 function download(data: ArrayBuffer, filename: string, mediaType: string): void {
   const url = URL.createObjectURL(new Blob([data], { type: mediaType }));
@@ -26,9 +27,12 @@ export function DigitalSignaturePanel() {
   const [progress, setProgress] = React.useState('');
   const [error, setError] = React.useState<string | null>(null);
   const [completed, setCompleted] = React.useState(false);
+  const capabilities = useApiCapabilities();
+  const signingCapability = getOperationCapability(capabilities.data, 'pdf.digital-sign');
+  const signingAvailable = signingCapability?.available === true;
 
   const sign = React.useCallback(async () => {
-    if (!pdf || !certificate || !consent) return;
+    if (!pdf || !certificate || !consent || !signingAvailable) return;
     setIsSigning(true);
     setCompleted(false);
     setError(null);
@@ -55,7 +59,7 @@ export function DigitalSignaturePanel() {
       setIsSigning(false);
       setProgress('');
     }
-  }, [certificate, certificatePassword, consent, location, pdf, reason, signerName]);
+  }, [certificate, certificatePassword, consent, location, pdf, reason, signerName, signingAvailable]);
 
   return (
     <form
@@ -103,9 +107,15 @@ export function DigitalSignaturePanel() {
       </div>
 
       <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
-        <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} className="mt-0.5 rounded" />
+        <input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} disabled={!signingAvailable || isSigning} className="mt-0.5 rounded" />
         <span>Upload this PDF, certificate, and certificate password to the temporary backend for signing. Inputs are deleted after processing and the output after download or TTL.</span>
       </label>
+
+      {!capabilities.isLoading && !signingAvailable && (
+        <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+          {signingCapability?.unavailableReason ?? 'Certificate signing is unavailable on the configured backend.'}
+        </p>
+      )}
 
       {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{error}</p>}
       {completed && (
@@ -114,7 +124,7 @@ export function DigitalSignaturePanel() {
         </p>
       )}
 
-      <Button type="submit" disabled={!pdf || !certificate || !consent || isSigning}>
+      <Button type="submit" disabled={!pdf || !certificate || !consent || !signingAvailable || isSigning}>
         {isSigning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
         {isSigning ? progress || 'Signing…' : 'Sign and download'}
       </Button>

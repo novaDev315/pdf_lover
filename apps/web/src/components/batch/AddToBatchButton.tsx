@@ -21,6 +21,7 @@ import {
   type BatchFileInfo,
 } from '@/store/batch-store';
 import { generateId } from '@/lib/utils';
+import { validateBatchOperation } from '@/lib/batch-validation';
 
 /**
  * Props for AddToBatchButton
@@ -73,6 +74,12 @@ export function AddToBatchButton({
         description: 'Please select files before adding to batch',
         variant: 'destructive',
       });
+      return;
+    }
+
+    const validationError = validateBatchOperation(operationType, options);
+    if (validationError) {
+      toast({ ...validationError, variant: 'destructive' });
       return;
     }
 
@@ -156,6 +163,12 @@ export function useAddToBatch() {
           description: 'Please select files before adding to batch',
           variant: 'destructive',
         });
+        return false;
+      }
+
+      const validationError = validateBatchOperation(operationType, options);
+      if (validationError) {
+        toast({ ...validationError, variant: 'destructive' });
         return false;
       }
 

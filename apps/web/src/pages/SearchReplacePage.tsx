@@ -3,7 +3,7 @@
  */
 
 import * as React from 'react';
-import { Upload, Search, FileText, Download, Loader2 } from 'lucide-react';
+import { Upload, Search, FileText, Download, Loader2, AlertTriangle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -179,11 +179,17 @@ export function SearchReplacePage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-surface-900 dark:text-white mb-2">
-            Search & Replace Text
+            Search & Overlay Text
           </h1>
           <p className="text-surface-600 dark:text-surface-400">
-            Find and replace text in your PDF documents. All processing happens locally in your browser.
+            Find text and place visible replacement text over it. All processing happens locally in your browser.
           </p>
+          <div className="mt-4 flex max-w-3xl items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+            <p>
+              This is a visual overlay, not true PDF content editing or secure redaction. Original text may remain searchable or extractable. Use Secure Redaction when content must be permanently removed.
+            </p>
+          </div>
         </div>
 
         {!selectedFile ? (
@@ -229,7 +235,7 @@ export function SearchReplacePage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <Search className="h-5 w-5" />
-                    Search & Replace
+                    Search & Overlay
                   </CardTitle>
                   <CardDescription>
                     {metadata?.title || selectedFile.name}

@@ -37,7 +37,8 @@ import {
   type PDFSecurityInfo,
 } from '@pdflover/pdf-core'
 import type { ProgressInfo } from '@pdflover/shared'
-import { runServerPdfOperation } from '@/lib/api'
+import { getOperationCapability, runServerPdfOperation } from '@/lib/api'
+import { useApiCapabilities } from '@/hooks/useApiCapabilities'
 
 /**
  * Checkbox component for permissions
@@ -105,7 +106,12 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
   const [progress, setProgress] = React.useState(0)
   const [progressStage, setProgressStage] = React.useState('')
   const [activeTab, setActiveTab] = React.useState('encrypt')
+  const [serverConsent, setServerConsent] = React.useState(false)
   const { toast } = useToast()
+  const capabilities = useApiCapabilities()
+  const operationKind = activeTab === 'encrypt' ? 'pdf.encrypt' : 'pdf.decrypt'
+  const operationCapability = getOperationCapability(capabilities.data, operationKind)
+  const operationAvailable = operationCapability?.available === true
 
   // Encryption settings
   const [userPassword, setUserPassword] = React.useState('')
@@ -142,6 +148,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
       if (!selectedFile) return
 
       setFile(selectedFile)
+      setServerConsent(false)
 
       // Check security status
       try {
@@ -204,6 +211,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
       })
       return
     }
+    if (!serverConsent || !operationAvailable) return
 
     setIsProcessing(true)
     setProgress(0)
@@ -248,7 +256,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
       setProgress(0)
       setProgressStage('')
     }
-  }, [file, userPassword, ownerPassword, encryptionLevel, permissions, handleProgress, toast])
+  }, [file, userPassword, ownerPassword, encryptionLevel, permissions, serverConsent, operationAvailable, handleProgress, toast])
 
   /**
    * Decrypt the PDF
@@ -271,6 +279,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
       })
       return
     }
+    if (!serverConsent || !operationAvailable) return
 
     setIsProcessing(true)
     setProgress(0)
@@ -309,7 +318,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
       setProgress(0)
       setProgressStage('')
     }
-  }, [file, decryptPassword, handleProgress, toast])
+  }, [file, decryptPassword, serverConsent, operationAvailable, handleProgress, toast])
 
   return (
     <Card className={cn('w-full', className)}>
@@ -376,6 +385,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
               onClick={() => {
                 setFile(null)
                 setSecurityInfo(null)
+                setServerConsent(false)
               }}
               disabled={isProcessing}
             >
@@ -384,8 +394,31 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
           </div>
         )}
 
+        {file && (
+          <div className="space-y-3">
+            <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+              <input
+                type="checkbox"
+                checked={serverConsent}
+                onChange={(event) => setServerConsent(event.target.checked)}
+                disabled={!operationAvailable || isProcessing}
+                className="mt-0.5 rounded"
+              />
+              <span>Upload this PDF to the temporary backend for {activeTab === 'encrypt' ? 'AES encryption' : 'decryption'}. Inputs are deleted after processing; outputs are deleted after download or TTL.</span>
+            </label>
+            {!capabilities.isLoading && !operationAvailable && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+                {operationCapability?.unavailableReason ?? 'This security operation is unavailable on the configured backend.'}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Tabs for Encrypt/Decrypt */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <Tabs value={activeTab} onValueChange={(value) => {
+          setActiveTab(value)
+          setServerConsent(false)
+        }}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="encrypt" className="flex items-center gap-2">
               <Lock className="h-4 w-4" />
@@ -528,7 +561,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
             {/* Encrypt Button */}
             <Button
               onClick={handleEncrypt}
-              disabled={!file || !ownerPassword || isProcessing}
+              disabled={!file || !ownerPassword || !serverConsent || !operationAvailable || isProcessing}
               className="w-full"
             >
               {isProcessing ? (
@@ -579,7 +612,7 @@ export function SecurityPanel({ className }: SecurityPanelProps) {
             {/* Decrypt Button */}
             <Button
               onClick={handleDecrypt}
-              disabled={!file || !decryptPassword || isProcessing}
+              disabled={!file || !decryptPassword || !serverConsent || !operationAvailable || isProcessing}
               className="w-full"
             >
               {isProcessing ? (

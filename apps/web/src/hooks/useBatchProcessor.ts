@@ -324,6 +324,7 @@ async function processSecurity(
 ): Promise<BatchOperationArtifact[]> {
   const options = operation.options as import('@/store/batch-store').SecurityOptions;
   if (!options.ownerPassword) throw new Error('Owner password is required for PDF encryption');
+  if (!options.serverConsent) throw new Error('Temporary server processing consent is required');
   const results: BatchOperationArtifact[] = [];
   for (let i = 0; i < operation.files.length; i++) {
     const fileInfo = operation.files[i]!;

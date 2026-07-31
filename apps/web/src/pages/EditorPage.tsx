@@ -56,7 +56,8 @@ import {
 import { db } from '@/lib/storage';
 import { useFileStore } from '@/store/file-store';
 import { useOperationHistory } from '@/hooks/useOperationHistory';
-import { runServerPdfOperation } from '@/lib/api';
+import { getOperationCapability, runServerPdfOperation } from '@/lib/api';
+import { useApiCapabilities } from '@/hooks/useApiCapabilities';
 
 /**
  * Page dimensions interface
@@ -73,6 +74,9 @@ interface PageDimensions {
 export function EditorPage() {
   const [searchParams] = useSearchParams();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const capabilities = useApiCapabilities();
+  const redactionCapability = getOperationCapability(capabilities.data, 'pdf.secure-redact');
+  const secureRedactionAvailable = redactionCapability?.available === true;
 
   // PDF document state
   const {
@@ -432,6 +436,9 @@ export function EditorPage() {
   const buildFinalPdf = React.useCallback(async (): Promise<ArrayBuffer> => {
     const locallyAnnotated = await buildAnnotatedPdf();
     if (secureRedactions.length === 0) return locallyAnnotated;
+    if (!secureRedactionAvailable) {
+      throw new Error(redactionCapability?.unavailableReason ?? 'Secure redaction is unavailable on the configured backend');
+    }
     const [result] = await runServerPdfOperation({
       operation: 'pdf.secure-redact',
       file: new File([locallyAnnotated], fileName, { type: 'application/pdf' }),
@@ -448,10 +455,14 @@ export function EditorPage() {
     });
     if (!result) throw new Error('The backend returned no securely redacted PDF');
     return result.data;
-  }, [buildAnnotatedPdf, fileName, secureRedactions]);
+  }, [buildAnnotatedPdf, fileName, secureRedactions, secureRedactionAvailable, redactionCapability?.unavailableReason]);
 
   // Export PDF with flattened annotations
   const handleExport = React.useCallback(async () => {
+    if (secureRedactions.length > 0 && !secureRedactionAvailable) {
+      setSaveError(redactionCapability?.unavailableReason ?? 'Secure redaction is unavailable on the configured backend');
+      return;
+    }
     if (
       secureRedactions.length > 0 &&
       !window.confirm(
@@ -473,7 +484,7 @@ export function EditorPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [buildFinalPdf, fileName, secureRedactions.length]);
+  }, [buildFinalPdf, fileName, secureRedactions.length, secureRedactionAvailable, redactionCapability?.unavailableReason]);
 
   const handleSave = React.useCallback(() => {
     setSaveError(null);
@@ -755,7 +766,7 @@ export function EditorPage() {
                     variant="default"
                     size="sm"
                     onClick={handleExport}
-                    disabled={isSaving || annotations.length === 0}
+                    disabled={isSaving || annotations.length === 0 || (secureRedactions.length > 0 && !secureRedactionAvailable)}
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Export
@@ -940,6 +951,11 @@ export function EditorPage() {
               onChange={(e) => setFileName(e.target.value)}
               className="mt-1"
             />
+            {secureRedactions.length > 0 && !capabilities.isLoading && !secureRedactionAvailable && (
+              <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+                {redactionCapability?.unavailableReason ?? 'Secure redaction is unavailable on the configured backend.'}
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowSaveDialog(false)}>
@@ -947,7 +963,7 @@ export function EditorPage() {
             </Button>
             <Button
               onClick={() => void persistDocument()}
-              disabled={isSaving}
+              disabled={isSaving || (secureRedactions.length > 0 && !secureRedactionAvailable)}
             >
               {isSaving
                 ? 'Saving…'

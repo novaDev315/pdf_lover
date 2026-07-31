@@ -46,6 +46,8 @@ services:
     service_type: frontend
     build_args:
       VITE_API_BASE_URL: https://api.pdflover.lab.novadev.tech
+      VITE_BUILD_SHA: "${GIT_COMMIT_SHA:-unknown}"
+      VITE_BUILD_TIME: "${BUILD_TIMESTAMP:-unknown}"
 
 workspace:
   monorepo: turborepo

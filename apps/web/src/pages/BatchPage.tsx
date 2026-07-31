@@ -37,6 +37,8 @@ import {
   X,
   Play,
   Settings2,
+  Crop,
+  Maximize2,
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -50,9 +52,11 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import { FileDropzone } from '@/components/file-manager/FileDropzone';
-import { BatchPanel } from '@/components/batch/BatchPanel';
 import { useToast } from '@/hooks/use-toast';
-import { useBatchProcessor } from '@/hooks/useBatchProcessor';
+import { validateBatchOperation } from '@/lib/batch-validation';
+import { useApiCapabilities } from '@/hooks/useApiCapabilities';
+import { getOperationCapability } from '@/lib/api';
+import type { ServerOperationKind } from '@pdflover/shared';
 import {
   cn,
   formatFileSize,
@@ -70,6 +74,9 @@ import {
   type ConvertOptions,
   type OCROptions,
   type BatchFileInfo,
+  type CropOptions,
+  type TrimOptions,
+  type ResizeOptions,
 } from '@/store/batch-store';
 
 /**
@@ -132,6 +139,27 @@ const OPERATION_CONFIGS: OperationConfig[] = [
     description: 'Password protect all PDFs',
     icon: <Lock className="h-5 w-5" />,
     color: 'text-red-500 bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',
+  },
+  {
+    type: 'crop',
+    label: 'Crop All',
+    description: 'Remove a percentage from every page edge',
+    icon: <Crop className="h-5 w-5" />,
+    color: 'text-lime-700 bg-lime-50 dark:bg-lime-950 border-lime-200 dark:border-lime-800',
+  },
+  {
+    type: 'trim',
+    label: 'Trim Margins',
+    description: 'Automatically remove white page margins',
+    icon: <Scissors className="h-5 w-5" />,
+    color: 'text-teal-600 bg-teal-50 dark:bg-teal-950 border-teal-200 dark:border-teal-800',
+  },
+  {
+    type: 'resize',
+    label: 'Resize All',
+    description: 'Resize every page to a standard paper size',
+    icon: <Maximize2 className="h-5 w-5" />,
+    color: 'text-indigo-600 bg-indigo-50 dark:bg-indigo-950 border-indigo-200 dark:border-indigo-800',
   },
 ];
 
@@ -225,13 +253,19 @@ function OperationOptions({
       const levelIndex = ['low', 'medium', 'high', 'maximum'].indexOf(
         compressOptions.level
       );
+      const levelLabels: Record<CompressOptions['level'], string> = {
+        low: 'fast local',
+        medium: 'responsive local',
+        high: 'smooth local',
+        maximum: 'maximum server',
+      };
       return (
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Compression Level</label>
               <span className="text-sm text-primary-600 dark:text-primary-400 capitalize">
-                {compressOptions.level}
+                {levelLabels[compressOptions.level]}
               </span>
             </div>
             <Slider
@@ -250,9 +284,9 @@ function OperationOptions({
               step={1}
             />
             <div className="flex justify-between text-xs text-surface-500">
-              <span>Low</span>
-              <span>Medium</span>
-              <span>High</span>
+              <span>Fast</span>
+              <span>Responsive</span>
+              <span>Smooth</span>
               <span>Max</span>
             </div>
             {compressOptions.level === 'maximum' && (
@@ -419,6 +453,15 @@ function OperationOptions({
               ))}
             </div>
           </div>
+          <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950/40">
+            <input
+              type="checkbox"
+              checked={securityOptions.serverConsent === true}
+              onChange={(event) => onChange({ ...securityOptions, serverConsent: event.target.checked })}
+              className="mt-0.5 rounded"
+            />
+            <span>Upload these PDFs to the temporary backend for AES encryption. Inputs are deleted after processing; outputs are deleted after download or TTL.</span>
+          </label>
         </div>
       );
     }
@@ -523,6 +566,110 @@ function OperationOptions({
       );
     }
 
+    case 'crop': {
+      const cropOptions = options as CropOptions;
+      const values = cropOptions.cropPercent ?? { left: 0, right: 0, top: 0, bottom: 0 };
+      return (
+        <div className="space-y-3">
+          <p className="text-xs text-surface-500">Percentage removed from each page edge</p>
+          <div className="grid grid-cols-2 gap-3">
+            {(['left', 'right', 'top', 'bottom'] as const).map((edge) => (
+              <label key={edge} className="space-y-1 text-sm capitalize">
+                <span>{edge} (%)</span>
+                <Input
+                  type="number"
+                  min={0}
+                  max={45}
+                  value={values[edge]}
+                  onChange={(event) => onChange({
+                    ...cropOptions,
+                    cropPercent: { ...values, [edge]: Math.min(45, Math.max(0, Number(event.target.value))) },
+                  })}
+                />
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    case 'trim': {
+      const trimOptions = options as TrimOptions;
+      return (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm"><span>White threshold</span><span>{trimOptions.threshold ?? 250}</span></div>
+            <Slider
+              value={[trimOptions.threshold ?? 250]}
+              min={200}
+              max={255}
+              step={1}
+              onValueChange={([value = 250]) => onChange({ ...trimOptions, threshold: value })}
+            />
+          </div>
+          <label className="space-y-1 text-sm">
+            <span>Padding after trim (points)</span>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              value={trimOptions.padding ?? 10}
+              onChange={(event) => onChange({ ...trimOptions, padding: Math.max(0, Number(event.target.value)) })}
+            />
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={trimOptions.uniformPadding !== false}
+              onChange={(event) => onChange({ ...trimOptions, uniformPadding: event.target.checked })}
+            />
+            Use one detected trim box for consistent page sizes
+          </label>
+        </div>
+      );
+    }
+
+    case 'resize': {
+      const resizeOptions = options as ResizeOptions;
+      return (
+        <div className="space-y-4">
+          <label className="space-y-1 text-sm">
+            <span>Page size</span>
+            <select
+              value={resizeOptions.preset ?? 'A4'}
+              onChange={(event) => onChange({ ...resizeOptions, preset: event.target.value })}
+              className="w-full rounded-lg border border-surface-300 bg-card px-3 py-2 dark:border-surface-700 dark:bg-surface-900"
+            >
+              {['A4', 'Letter', 'Legal', 'A3', 'A5'].map((preset) => <option key={preset} value={preset}>{preset}</option>)}
+            </select>
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['portrait', 'landscape'] as const).map((orientation) => (
+              <button
+                key={orientation}
+                type="button"
+                onClick={() => onChange({ ...resizeOptions, orientation })}
+                className={cn(
+                  'rounded-lg border px-3 py-2 text-sm capitalize',
+                  resizeOptions.orientation === orientation ? 'border-primary-500 bg-primary-50 dark:bg-primary-950' : 'border-surface-200 dark:border-surface-700',
+                )}
+              >
+                {orientation}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={resizeOptions.scaleContent !== false} onChange={(event) => onChange({ ...resizeOptions, scaleContent: event.target.checked })} />
+            Scale page content to fit
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={resizeOptions.centerContent !== false} onChange={(event) => onChange({ ...resizeOptions, centerContent: event.target.checked })} />
+            Center page content
+          </label>
+        </div>
+      );
+    }
+
     default:
       return (
         <p className="text-sm text-surface-500 dark:text-surface-400">
@@ -558,6 +705,23 @@ function getDefaultOptions(type: BatchOperationType): BatchOperationOptions {
       return { format: 'png', quality: 90 } as ConvertOptions;
     case 'ocr':
       return { language: 'eng', enhanceScans: false, engine: 'local' } as OCROptions;
+    case 'crop':
+      return {
+        cropMode: 'percentage',
+        boxType: 'CropBox',
+        cropPercent: { left: 0, right: 0, top: 0, bottom: 0 },
+      } as CropOptions;
+    case 'trim':
+      return { threshold: 250, padding: 10, uniformPadding: true } as TrimOptions;
+    case 'resize':
+      return {
+        resizeMode: 'preset',
+        preset: 'A4',
+        orientation: 'portrait',
+        maintainAspectRatio: true,
+        scaleContent: true,
+        centerContent: true,
+      } as ResizeOptions;
     default:
       return {};
   }
@@ -572,18 +736,10 @@ export function BatchPage() {
   const [options, setOptions] = React.useState<BatchOperationOptions>(
     getDefaultOptions('merge')
   );
-  const [showPanel, setShowPanel] = React.useState(false);
-
   const { toast } = useToast();
+  const capabilities = useApiCapabilities();
   const stats = useBatchStore(useShallow(selectQueueStats));
-  const { addToQueue, startQueue } = useBatchStore();
-
-  // Initialize batch processor
-  useBatchProcessor({
-    autoProcess: true,
-    showToasts: true,
-    storeResults: true,
-  });
+  const { addToQueue, startQueue, setPanelOpen } = useBatchStore();
 
   // DnD sensors
   const sensors = useSensors(
@@ -660,27 +816,12 @@ export function BatchPage() {
         description: 'Please add at least one PDF file',
         variant: 'destructive',
       });
-      return;
+      return false;
     }
-    if (selectedType === 'security' && !(options as SecurityOptions).ownerPassword) {
-      toast({
-        title: 'Owner password required',
-        description: 'Set a distinct owner password before adding encryption to the queue',
-        variant: 'destructive',
-      });
-      return;
-    }
-    const requiresServerConsent =
-      (selectedType === 'compress' && (options as CompressOptions).level === 'maximum') ||
-      (selectedType === 'convert' && ['docx', 'xlsx', 'pptx'].includes((options as ConvertOptions).format)) ||
-      (selectedType === 'ocr' && (options as OCROptions).engine === 'server');
-    if (requiresServerConsent && !('serverConsent' in options && options.serverConsent === true)) {
-      toast({
-        title: 'Upload consent required',
-        description: 'Confirm temporary backend processing before adding this operation to the queue',
-        variant: 'destructive',
-      });
-      return;
+    const validationError = validateBatchOperation(selectedType, options);
+    if (validationError) {
+      toast({ ...validationError, variant: 'destructive' });
+      return false;
     }
 
     const batchFiles: BatchFileInfo[] = files.map((item) => ({
@@ -703,15 +844,15 @@ export function BatchPage() {
 
     // Clear files after adding to queue
     setFiles([]);
-    setShowPanel(true);
-  }, [files, selectedType, options, addToQueue, toast]);
+    setPanelOpen(true);
+    return true;
+  }, [files, selectedType, options, addToQueue, setPanelOpen, toast]);
 
   /**
    * Start processing immediately
    */
   const handleProcessNow = React.useCallback(() => {
-    handleAddToQueue();
-    startQueue();
+    if (handleAddToQueue()) startQueue();
   }, [handleAddToQueue, startQueue]);
 
   const totalSize = React.useMemo(
@@ -720,6 +861,23 @@ export function BatchPage() {
   );
 
   const selectedConfig = OPERATION_CONFIGS.find((c) => c.type === selectedType);
+  const requiredServerOperation = React.useMemo<ServerOperationKind | null>(() => {
+    if (selectedType === 'compress' && (options as CompressOptions).level === 'maximum') {
+      return 'pdf.compress.lossy';
+    }
+    if (selectedType === 'convert' && ['docx', 'xlsx', 'pptx'].includes((options as ConvertOptions).format)) {
+      return `pdf.convert.${(options as ConvertOptions).format}` as ServerOperationKind;
+    }
+    if (selectedType === 'ocr' && (options as OCROptions).engine === 'server') {
+      return 'pdf.ocr';
+    }
+    if (selectedType === 'security') return 'pdf.encrypt';
+    return null;
+  }, [selectedType, options]);
+  const requiredCapability = requiredServerOperation
+    ? getOperationCapability(capabilities.data, requiredServerOperation)
+    : undefined;
+  const serverOperationAvailable = requiredServerOperation === null || requiredCapability?.available === true;
 
   return (
     <div className="min-h-screen bg-surface-50 dark:bg-surface-950 flex">
@@ -751,9 +909,9 @@ export function BatchPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowPanel(!showPanel)}
+                onClick={() => setPanelOpen(true)}
               >
-                {showPanel ? 'Hide Queue' : 'Show Queue'}
+                Show Queue
               </Button>
             </div>
           )}
@@ -881,6 +1039,14 @@ export function BatchPage() {
                     options={options}
                     onChange={setOptions}
                   />
+                  {requiredServerOperation && !capabilities.isLoading && !serverOperationAvailable && (
+                    <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+                      {requiredCapability?.unavailableReason ?? 'This server operation is unavailable on the configured backend.'}
+                    </p>
+                  )}
+                  {requiredServerOperation && capabilities.isLoading && (
+                    <p className="mt-3 text-sm text-surface-500" role="status">Checking backend availability…</p>
+                  )}
                 </div>
               </div>
 
@@ -888,7 +1054,7 @@ export function BatchPage() {
               <div className="flex flex-col gap-2">
                 <Button
                   onClick={handleProcessNow}
-                  disabled={files.length === 0}
+                  disabled={files.length === 0 || !serverOperationAvailable}
                   className="w-full"
                 >
                   <Play className="h-4 w-4 mr-2" />
@@ -897,7 +1063,7 @@ export function BatchPage() {
                 <Button
                   variant="outline"
                   onClick={handleAddToQueue}
-                  disabled={files.length === 0}
+                  disabled={files.length === 0 || !serverOperationAvailable}
                   className="w-full"
                 >
                   <Plus className="h-4 w-4 mr-2" />
@@ -909,15 +1075,6 @@ export function BatchPage() {
         </div>
       </div>
 
-      {/* Batch Panel Sidebar */}
-      {showPanel && (
-        <BatchPanel
-          collapsible
-          onCollapseChange={(collapsed) => {
-            if (collapsed) setShowPanel(false);
-          }}
-        />
-      )}
     </div>
   );
 }

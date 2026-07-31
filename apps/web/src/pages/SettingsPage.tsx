@@ -48,6 +48,7 @@ import {
 import { cn, formatFileSize } from '@/lib/utils';
 import { db } from '@/lib/storage';
 import webPackage from '../../package.json';
+import { useApiCapabilities } from '@/hooks/useApiCapabilities';
 
 /**
  * Settings section navigation
@@ -107,15 +108,19 @@ interface SelectButtonProps<T extends string> {
   label: string;
   selected: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }
 
-function SelectButton<T extends string>({ value: _value, label, selected, onClick }: SelectButtonProps<T>) {
+function SelectButton<T extends string>({ value: _value, label, selected, onClick, disabled = false }: SelectButtonProps<T>) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
+      aria-disabled={disabled}
       className={cn(
         'px-4 py-2 rounded-md text-sm font-medium transition-all',
+        disabled && 'cursor-not-allowed opacity-50',
         selected
           ? 'bg-primary text-primary-foreground'
           : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
@@ -289,6 +294,8 @@ export function SettingsPage() {
   const [dataActionStatus, setDataActionStatus] = React.useState<string | null>(null);
   const sectionRefs = React.useRef<Record<string, HTMLElement | null>>({});
   const importInputRef = React.useRef<HTMLInputElement>(null);
+  const capabilities = useApiCapabilities();
+  const openRouterAvailable = capabilities.data?.ai.openRouterConfigured === true;
 
   // Settings store
   const {
@@ -646,6 +653,7 @@ export function SettingsPage() {
                       label="OpenRouter (Cloud)"
                       selected={ai.provider === 'openrouter'}
                       onClick={() => updateAISettings({ provider: 'openrouter' })}
+                      disabled={!openRouterAvailable}
                     />
                   </div>
                   <p className="text-xs text-muted-foreground">
@@ -653,6 +661,11 @@ export function SettingsPage() {
                       ? 'AI runs locally in your browser. No data is sent to external servers.'
                       : 'Uses the server-configured OpenRouter connection. Document context is sent only when you choose cloud AI.'}
                   </p>
+                  {!capabilities.isLoading && !openRouterAvailable && (
+                    <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+                      Cloud AI is unavailable because OpenRouter is not configured on this backend. Local AI remains available.
+                    </p>
+                  )}
                 </div>
 
                 {/* Default Model */}
@@ -907,6 +920,14 @@ export function SettingsPage() {
                   <p className="text-sm text-muted-foreground">
                     Version {webPackage.version}
                   </p>
+                  <dl className="grid gap-1 text-xs text-muted-foreground sm:grid-cols-[8rem_1fr]">
+                    <dt>Web build</dt>
+                    <dd className="font-mono">{import.meta.env.VITE_BUILD_SHA || 'development'}</dd>
+                    <dt>Built</dt>
+                    <dd>{import.meta.env.VITE_BUILD_TIME || 'local development'}</dd>
+                    <dt>API version</dt>
+                    <dd className="font-mono">{capabilities.data?.serviceVersion || 'unavailable'}</dd>
+                  </dl>
                   <p className="text-sm text-muted-foreground">
                     A local-first PDF processing platform. Browser-capable operations stay local;
                     server-only operations and cloud AI run only when explicitly selected.

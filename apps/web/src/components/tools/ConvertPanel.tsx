@@ -16,6 +16,8 @@ import {
   Package,
   ScanLine,
   Languages,
+  FileSpreadsheet,
+  ShieldCheck,
 } from 'lucide-react'
 import JSZip from 'jszip'
 import { PDFDocument } from 'pdf-lib'
@@ -47,11 +49,15 @@ import { convertPDF, extractText, getSupportedFormats } from '@pdflover/pdf-core
 import type { ProgressInfo, ConvertOutputFormat, ImageQuality } from '@pdflover/shared'
 import type { OCRLanguageCode } from '@pdflover/pdf-core'
 import { useSettingsStore } from '@/store/settings-store'
+import { useApiCapabilities } from '@/hooks/useApiCapabilities'
+import { getOperationCapability, runServerPdfOperation } from '@/lib/api'
+import type { ServerOperationKind } from '@pdflover/shared'
 
 /**
  * Conversion mode
  */
-type ConversionMode = 'pdf-to-image' | 'image-to-pdf' | 'pdf-to-text'
+type ConversionMode = 'pdf-to-image' | 'image-to-pdf' | 'pdf-to-text' | 'pdf-to-office'
+type OfficeFormat = 'docx' | 'xlsx' | 'pptx'
 
 /**
  * OCR language options for the UI
@@ -145,7 +151,10 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
     return [configured ?? 'eng']
   })
   const [isScannedPdf, setIsScannedPdf] = React.useState<boolean | null>(null)
+  const [officeFormat, setOfficeFormat] = React.useState<OfficeFormat>('docx')
+  const [serverConsent, setServerConsent] = React.useState(false)
   const { toast } = useToast()
+  const capabilities = useApiCapabilities()
 
   const {
     state: ocrState,
@@ -177,6 +186,7 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
     setPageCount(0)
     setIsScannedPdf(null)
     setUseOCRForText(false)
+    setServerConsent(false)
     closeDocument()
     resetOCR()
   }, [mode, closeDocument, resetOCR])
@@ -495,6 +505,44 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
     }
   }, [file, useOCRForText, pdfDocument, recognizePDF, toast])
 
+  const officeOperation = `pdf.convert.${officeFormat}` as ServerOperationKind
+  const officeCapability = getOperationCapability(capabilities.data, officeOperation)
+  const officeAvailable = officeCapability?.available === true
+
+  const handlePdfToOffice = React.useCallback(async () => {
+    if (!file || !serverConsent || !officeAvailable) return
+
+    setIsProcessing(true)
+    setProgress(0)
+    setProgressStage(`Converting PDF to ${officeFormat.toUpperCase()} on the secure backend...`)
+    try {
+      const artifacts = await runServerPdfOperation({
+        operation: officeOperation,
+        file,
+        options: {},
+        onProgress: handleProgress,
+      })
+      if (artifacts.length === 0) throw new Error('The server returned no converted file')
+      for (const artifact of artifacts) {
+        downloadBlob(arrayBufferToBlob(artifact.data, artifact.mediaType), artifact.filename)
+      }
+      toast({
+        title: 'Conversion complete',
+        description: `${officeFormat.toUpperCase()} file downloaded successfully`,
+      })
+    } catch (error) {
+      toast({
+        title: 'Conversion failed',
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsProcessing(false)
+      setProgress(0)
+      setProgressStage('')
+    }
+  }, [file, serverConsent, officeAvailable, officeFormat, officeOperation, handleProgress, toast])
+
   /**
    * Handle conversion based on mode
    */
@@ -509,20 +557,25 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
       case 'pdf-to-text':
         handlePdfToText()
         break
+      case 'pdf-to-office':
+        handlePdfToOffice()
+        break
     }
-  }, [mode, handlePdfToImage, handleImageToPdf, handlePdfToText])
+  }, [mode, handlePdfToImage, handleImageToPdf, handlePdfToText, handlePdfToOffice])
 
   const canConvert = React.useMemo(() => {
     switch (mode) {
       case 'pdf-to-image':
       case 'pdf-to-text':
         return file !== null
+      case 'pdf-to-office':
+        return file !== null && serverConsent && officeAvailable
       case 'image-to-pdf':
         return imageFiles.length > 0
       default:
         return false
     }
-  }, [mode, file, imageFiles.length])
+  }, [mode, file, imageFiles.length, serverConsent, officeAvailable])
 
   return (
     <Card className={cn('w-full', className)}>
@@ -532,13 +585,13 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
           Convert PDF
         </CardTitle>
         <CardDescription>
-          Convert PDFs to images or text, or create PDFs from images.
+          Convert PDFs to images, text, or Office files, or create PDFs from images.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Conversion Mode Tabs */}
         <Tabs value={mode} onValueChange={(v) => setMode(v as ConversionMode)}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
             <TabsTrigger value="pdf-to-image" className="flex items-center gap-1.5">
               <Image className="h-4 w-4" />
               <span className="hidden sm:inline">PDF to Image</span>
@@ -553,6 +606,11 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
               <FileType className="h-4 w-4" />
               <span className="hidden sm:inline">PDF to Text</span>
               <span className="sm:hidden">To Text</span>
+            </TabsTrigger>
+            <TabsTrigger value="pdf-to-office" className="flex items-center gap-1.5">
+              <FileSpreadsheet className="h-4 w-4" />
+              <span className="hidden sm:inline">PDF to Office</span>
+              <span className="sm:hidden">To Office</span>
             </TabsTrigger>
           </TabsList>
 
@@ -820,6 +878,75 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="pdf-to-office" className="mt-4 space-y-4">
+            {!file ? (
+              <FileDropzone onFilesAccepted={handlePdfAccepted} multiple={false} maxFiles={1} />
+            ) : (
+              <>
+                <div className="flex items-center gap-4 rounded-lg border border-surface-200 bg-surface-50 p-4 dark:border-surface-700 dark:bg-surface-800">
+                  <div className="flex h-16 w-12 shrink-0 items-center justify-center rounded bg-card dark:bg-surface-700">
+                    <FileText className="h-6 w-6 text-surface-400" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-surface-900 dark:text-white">{file.name}</p>
+                    <p className="text-xs text-surface-500">{formatFileSize(file.size)} · {pageCount} pages</p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={handleClearFile} disabled={isProcessing}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-surface-700 dark:text-surface-300">Output format</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['docx', 'xlsx', 'pptx'] as const).map((format) => (
+                      <Button
+                        key={format}
+                        type="button"
+                        variant={officeFormat === format ? 'default' : 'outline'}
+                        onClick={() => {
+                          setOfficeFormat(format)
+                          setServerConsent(false)
+                        }}
+                        disabled={isProcessing}
+                      >
+                        {format.toUpperCase()}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm dark:border-blue-800 dark:bg-blue-950/30">
+                  <div className="flex items-start gap-3">
+                    <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-blue-600 dark:text-blue-400" />
+                    <div className="space-y-2">
+                      <p className="font-medium text-blue-950 dark:text-blue-100">Temporary server processing required</p>
+                      <p className="text-blue-800 dark:text-blue-200">
+                        Office conversion uploads this PDF to the configured PDFLover backend. Job files expire automatically.
+                      </p>
+                      <label className="flex cursor-pointer items-start gap-2 text-blue-950 dark:text-blue-100">
+                        <input
+                          type="checkbox"
+                          checked={serverConsent}
+                          onChange={(event) => setServerConsent(event.target.checked)}
+                          disabled={!officeAvailable || isProcessing}
+                          className="mt-0.5 h-4 w-4"
+                        />
+                        I consent to temporary backend processing for this file.
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {!capabilities.isLoading && !officeAvailable && (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+                    {officeCapability?.unavailableReason ?? 'This Office conversion is unavailable on the configured backend.'}
+                  </p>
+                )}
+              </>
+            )}
+          </TabsContent>
         </Tabs>
 
         {/* Progress Indicator */}
@@ -879,12 +1006,14 @@ export function ConvertPanel({ className }: ConvertPanelProps) {
             )}
           </Button>
 
-          {file && mode === 'pdf-to-image' && (
+          {file && (mode === 'pdf-to-image' || mode === 'pdf-to-office') && (
             <AddToBatchButton
               operationType="convert"
               files={[file]}
-              options={{ format: outputFormat, quality: 90 }}
-              disabled={isProcessing}
+              options={mode === 'pdf-to-office'
+                ? { format: officeFormat, serverConsent }
+                : { format: outputFormat, quality: 90 }}
+              disabled={isProcessing || (mode === 'pdf-to-office' && !officeAvailable)}
               onAdded={handleClearFile}
             />
           )}

@@ -193,7 +193,7 @@ export const TOOL_CATALOG: ToolDefinition[] = [
   },
   {
     id: 'search',
-    name: 'Search & replace',
+    name: 'Search & overlay',
     description: 'Search document text and add visible replacement overlays.',
     path: '/search',
     category: 'understand',

@@ -274,14 +274,12 @@ export async function estimateCompression(
     const hasImages = avgBytesPerPage > 100000; // > 100KB per page suggests images
 
     // Estimate savings
-    let estimatedSavings = 5; // Base savings from optimization
+    // Structural rewrites are not guaranteed to reduce size. Start at zero so
+    // already-optimized and small PDFs are not shown a false savings promise.
+    let estimatedSavings = 0;
 
     if (hasImages) {
       estimatedSavings += 20; // Images can often be compressed more
-    }
-
-    if (hasForms) {
-      estimatedSavings += 5; // Forms add some bloat
     }
 
     // Large documents often have more redundancy
@@ -296,7 +294,7 @@ export async function estimateCompression(
     };
   } catch {
     return {
-      estimatedSavings: 10,
+      estimatedSavings: 0,
       hasImages: false,
       hasForms: false,
     };

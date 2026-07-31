@@ -34,6 +34,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import { PdfViewer } from "@/components/pdf/PdfViewer";
 import { db } from "@/lib/storage";
+import { useApiCapabilities } from "@/hooks/useApiCapabilities";
 
 function PDFViewer({
   documentId,
@@ -96,8 +97,8 @@ function EmptyState({ onUpload }: { onUpload: () => void }) {
           </div>
           <h1 className="mb-2 text-xl font-semibold">Chat with your PDF</h1>
           <p className="mb-6 text-sm text-muted-foreground">
-            Upload a PDF document to start asking questions. Your document is
-            processed locally - nothing is uploaded to any server.
+            Upload a PDF document to start asking questions. Local AI keeps the
+            document in your browser; cloud AI sends selected context only after you choose it.
           </p>
           <Button onClick={onUpload} className="gap-2">
             <Upload className="h-4 w-4" />
@@ -157,6 +158,8 @@ export function ChatPage() {
   } = useChatStore();
 
   const { ai: aiSettings } = useSettingsStore();
+  const capabilities = useApiCapabilities();
+  const cloudProviderAvailable = capabilities.data?.ai.openRouterConfigured === true;
 
   // RAG hook for document indexing and querying
   const {
@@ -300,15 +303,20 @@ export function ChatPage() {
 
     initializeLocalModel(aiSettings.localModelId).then((result) => {
       if (!result.success) {
-        console.error("Failed to initialize local model:", result.error);
+        setError(`Local AI could not start: ${result.error || "model initialization failed"}`);
       }
     });
-  }, [currentDocument, aiSettings.provider, aiSettings.localModelId]);
+  }, [currentDocument, aiSettings.provider, aiSettings.localModelId, setError]);
 
   // Handle sending a message
   const handleSendMessage = React.useCallback(
     async (content: string) => {
       if (!currentDocument || !currentConversation) return;
+
+      if (aiSettings.provider === "openrouter" && !cloudProviderAvailable) {
+        setError("Cloud AI is unavailable because OpenRouter is not configured on this backend. Select Local AI in Settings.");
+        return;
+      }
 
       // Add user message
       const userMessage = addMessage({
@@ -444,6 +452,7 @@ ${context.contextText}
       appendStreamingContent,
       finalizeStreamingMessage,
       setError,
+      cloudProviderAvailable,
     ],
   );
 
@@ -541,6 +550,7 @@ ${context.contextText}
             true,
           );
         }}
+        cloudProviderAvailable={cloudProviderAvailable}
       />
 
       {/* Floating chat button (when collapsed) */}

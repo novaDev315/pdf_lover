@@ -105,7 +105,7 @@ playwright_output="$("${playwright[@]}" -s="$session" run-code "async (page) => 
     ['/signature', 'Sign PDF'],
     ['/chat', 'Chat with PDF'],
     ['/editor', 'PDF Editor'],
-    ['/search', 'Search & Replace'],
+    ['/search', 'Search & Overlay'],
     ['/batch', 'Batch Operations'],
     ['/extract-images', 'Extract Images'],
     ['/extract-tables', 'Extract Tables'],
@@ -142,6 +142,28 @@ playwright_output="$("${playwright[@]}" -s="$session" run-code "async (page) => 
   await page.getByRole('searchbox', { name: 'Search PDF tools' }).waitFor();
   for (const route of workspaceRoutes) {
     await visitWorkspace(route);
+  }
+
+  await page.goto(baseUrl + '/convert', { waitUntil: 'domcontentloaded' });
+  await page.getByText('Loading workspace…').waitFor({ state: 'detached' });
+  await page.getByRole('tab', { name: 'PDF to Office' }).waitFor();
+
+  await page.goto(baseUrl + '/batch', { waitUntil: 'domcontentloaded' });
+  await page.getByText('Loading workspace…').waitFor({ state: 'detached' });
+  for (const label of ['Crop All', 'Trim Margins', 'Resize All']) {
+    await page.getByRole('button', { name: label }).waitFor();
+  }
+
+  await page.goto(baseUrl + '/search', { waitUntil: 'domcontentloaded' });
+  await page.getByText('Loading workspace…').waitFor({ state: 'detached' });
+  await page.getByText(/visual overlay, not true PDF content editing/i).waitFor();
+
+  await page.goto(baseUrl + '/settings', { waitUntil: 'domcontentloaded' });
+  await page.getByText('Loading workspace…').waitFor({ state: 'detached' });
+  const cloudProvider = page.getByRole('button', { name: 'OpenRouter (Cloud)' });
+  await cloudProvider.waitFor();
+  if (!(await cloudProvider.isDisabled())) {
+    throw new Error('OpenRouter provider must be disabled when the backend reports it unconfigured');
   }
 
   if (browserErrors.length > 0) {

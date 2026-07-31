@@ -1,7 +1,8 @@
-import { ArrowLeft, Files, History, Settings } from 'lucide-react'
+import { ArrowLeft, Files, History, Layers, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
+import { useBatchStore } from '@/store/batch-store'
 
 export interface ToolHeaderProps {
   /** Short tool name shown in the breadcrumb. */
@@ -13,6 +14,9 @@ export interface ToolHeaderProps {
  * Keeps the back action, product identity, and breadcrumb consistent.
  */
 export function ToolHeader({ title }: ToolHeaderProps) {
+  const queueLength = useBatchStore((state) => state.queue.length)
+  const setPanelOpen = useBatchStore((state) => state.setPanelOpen)
+
   return (
     <header className="sticky top-0 z-10 border-b border-surface-200 bg-card dark:border-surface-800 dark:bg-surface-900">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -44,6 +48,21 @@ export function ToolHeader({ title }: ToolHeaderProps) {
           </div>
 
           <nav aria-label="Workspace shortcuts" className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPanelOpen(true)}
+              aria-label={`Batch queue${queueLength > 0 ? `, ${queueLength} operations` : ''}`}
+              className="relative gap-2"
+            >
+              <Layers className="h-4 w-4" />
+              <span className="hidden lg:inline">Batch</span>
+              {queueLength > 0 && (
+                <span className="rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
+                  {queueLength}
+                </span>
+              )}
+            </Button>
             <Button variant="ghost" size="sm" asChild>
               <Link to="/files" aria-label="Library" className="gap-2">
                 <Files className="h-4 w-4" />
